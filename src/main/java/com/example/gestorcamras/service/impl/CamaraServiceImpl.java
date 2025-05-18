@@ -4,6 +4,8 @@ import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.repository.CamaraRepository;
 import com.example.gestorcamras.redis.IRedisCache;
 import com.example.gestorcamras.service.CamaraService;
+import com.example.gestorcamras.dto.CamaraDTO;
+import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,27 +23,63 @@ public class CamaraServiceImpl implements CamaraService {
 
     private static final String PREFIX_CACHE = "camara_";
 
-    @Override
-    public List<Camara> obtenerTodas() {
-        return camaraRepository.findAll();
+    // Métodos de conversión entre entidad y DTO
+    private CamaraDTO toDTO(Camara camara) {
+        if (camara == null) return null;
+        CamaraDTO dto = new CamaraDTO();
+        dto.setIdCamara(camara.getIdCamara());
+        dto.setNombre(camara.getNombre());
+        dto.setIp(camara.getIp());
+        dto.setActiva(camara.isActiva());
+        dto.setTipo(camara.getTipo());
+        dto.setFechaRegistro(camara.getFechaRegistro());
+        dto.setUbicacionId(camara.getUbicacion() != null ? camara.getUbicacion().getId() : null);
+        dto.setPropietarioId(camara.getPropietario() != null ? camara.getPropietario().getIdUsuario() : null);
+        dto.setEquipoId(camara.getEquipo() != null ? camara.getEquipo().getIdEquipo() : null);
+        return dto;
+    }
+
+    private Camara toEntity(CamaraDTO dto) {
+        if (dto == null) return null;
+        Camara camara = new Camara();
+        camara.setIdCamara(dto.getIdCamara());
+        camara.setNombre(dto.getNombre());
+        camara.setIp(dto.getIp());
+        camara.setActiva(dto.isActiva());
+        camara.setTipo(dto.getTipo());
+        camara.setFechaRegistro(dto.getFechaRegistro());
+        // Las relaciones (Ubicacion, Propietario, Equipo) deben ser resueltas en un paso adicional si es necesario
+        camara.setUbicacion(null);
+        camara.setPropietario(null);
+        camara.setEquipo(null);
+        return camara;
     }
 
     @Override
-    public Optional<Camara> obtenerPorId(Long id) {
+    public List<CamaraDTO> obtenerTodas() {
+        return camaraRepository.findAll()
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<CamaraDTO> obtenerPorId(Long id) {
         Optional<Camara> cacheada = redisCache.obtener(PREFIX_CACHE + id);
         if (cacheada.isPresent()) {
-            return cacheada;
+            return cacheada.map(this::toDTO);
         }
         Optional<Camara> camaraBD = camaraRepository.findById(id);
         camaraBD.ifPresent(cam -> redisCache.guardar(PREFIX_CACHE + id, cam));
-        return camaraBD;
+        return camaraBD.map(this::toDTO);
     }
 
     @Override
-    public Camara guardarCamara(Camara camara) {
+    public CamaraDTO guardarCamara(CamaraDTO camaraDTO) {
+        Camara camara = toEntity(camaraDTO);
         Camara guardada = camaraRepository.save(camara);
         redisCache.guardar(PREFIX_CACHE + guardada.getIdCamara(), guardada);
-        return guardada;
+        return toDTO(guardada);
     }
 
     @Override
@@ -51,22 +89,27 @@ public class CamaraServiceImpl implements CamaraService {
     }
 
     @Override
-    public List<Camara> obtenerPorPropietario(Long idUsuario) {
-        return camaraRepository.findByPropietarioIdUsuario(idUsuario);
+    public List<CamaraDTO> obtenerPorPropietario(Long idUsuario) {
+        return camaraRepository.findByPropietarioIdUsuario(idUsuario)
+                .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     @Override
-    public List<Camara> obtenerPorUbicacion(Long idUbicacion) {
-        return camaraRepository.findByUbicacionId(idUbicacion);
+    public List<CamaraDTO> obtenerPorUbicacion(Long idUbicacion) {
+        return camaraRepository.findByUbicacionId(idUbicacion)
+                .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     @Override
-    public List<Camara> obtenerPorActiva(boolean activa) {
-        return camaraRepository.findByActiva(activa);
+    public List<CamaraDTO> obtenerPorActiva(boolean activa) {
+        return camaraRepository.findByActiva(activa)
+                .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
     @Override
-    public List<Camara> obtenerPorTipo(String tipo) {
-        return camaraRepository.findByTipo(tipo);
+    public List<CamaraDTO> obtenerPorTipo(String tipo) {
+        return camaraRepository.findByTipo(tipo)
+                .stream().map(this::toDTO).collect(Collectors.toList());
     }
 }
+

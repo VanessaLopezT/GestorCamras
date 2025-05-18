@@ -5,7 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import com.example.gestorcamras.model.Camara;
+import com.example.gestorcamras.dto.CamaraDTO;
 
 @RestController
 @RequestMapping("/api/camaras")
@@ -15,31 +15,29 @@ public class CamaraController {
     private CamaraService camaraService;
 
     @GetMapping
-    public List<Camara> listarCamaras() {
+    public List<CamaraDTO> listarCamaras() {
         return camaraService.obtenerTodas();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Camara> obtenerCamaraPorId(@PathVariable Long id) {
+    public ResponseEntity<CamaraDTO> obtenerCamaraPorId(@PathVariable Long id) {
         return camaraService.obtenerPorId(id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping
-    public Camara crearCamara(@RequestBody Camara camara) {
-        return camaraService.guardarCamara(camara);
+    public ResponseEntity<CamaraDTO> crearCamara(@RequestBody CamaraDTO camaraDTO) {
+        CamaraDTO guardada = camaraService.guardarCamara(camaraDTO);
+        return ResponseEntity.ok(guardada);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Camara> actualizarCamara(@PathVariable Long id, @RequestBody Camara camaraDetalle) {
-        return camaraService.obtenerPorId(id).map(cam -> {
-            cam.setNombre(camaraDetalle.getNombre());
-            cam.setIp(camaraDetalle.getIp());
-            cam.setActiva(camaraDetalle.isActiva());
-            cam.setTipo(camaraDetalle.getTipo());
-            // Otras propiedades si quieres actualizar
-            return ResponseEntity.ok(camaraService.guardarCamara(cam));
+    public ResponseEntity<CamaraDTO> actualizarCamara(@PathVariable Long id, @RequestBody CamaraDTO camaraDetalle) {
+        return camaraService.obtenerPorId(id).map(existing -> {
+            camaraDetalle.setIdCamara(id);
+            CamaraDTO actualizada = camaraService.guardarCamara(camaraDetalle);
+            return ResponseEntity.ok(actualizada);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -52,3 +50,4 @@ public class CamaraController {
         return ResponseEntity.notFound().build();
     }
 }
+
