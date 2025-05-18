@@ -54,16 +54,12 @@ public class InformeController {
     @PostMapping
     @CacheEvict(value = {"informesCache", "informeCache"}, allEntries = true)
     public InformeDTO crearInforme(@RequestBody InformeDTO informeDTO) {
-        Informe informe = new Informe();
-        informe.setTitulo(informeDTO.getTitulo());
-        informe.setFechaGeneracion(informeDTO.getFechaGeneracion());
-        informe.setTamaño(informeDTO.getTamaño());
-        informe.setContenido(informeDTO.getContenido());
-        // Usuario lo debe setear el Service con findById para evitar inconsistencias
-        // o enviar como entidad ya seteada
-        // Aquí solo seteamos id, suponiendo que el Service se encargue
-        // Para simplificar aquí no lo seteo.
-
+        Informe informe = informeService.construirInforme(
+            informeDTO.getTitulo(),
+            informeDTO.getContenido(),
+            informeDTO.getTamaño(),
+            informeDTO.getUsuarioId()
+        );
         Informe guardado = informeService.guardarInforme(informe);
         return toDTO(guardado);
     }

@@ -9,4 +9,7 @@ public interface InformeService {
     Optional<Informe> obtenerPorId(Long id);
     Informe guardarInforme(Informe informe);
     void eliminarInforme(Long id);
+
+    // Nuevo método para construir informe usando patrón Builder
+    Informe construirInforme(String titulo, String contenido, double tamaño, Long usuarioId);
 }
