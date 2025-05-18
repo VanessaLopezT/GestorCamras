@@ -1,13 +1,13 @@
 package com.example.gestorcamras.service;
 
-import com.example.gestorcamras.model.Video;
+import com.example.gestorcamras.dto.VideoDTO;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface VideoService {
-    List<Video> obtenerTodos();
-    Optional<Video> obtenerPorId(Long id);
-    Video guardarVideo(Video video);
+    List<VideoDTO> obtenerTodos();
+    Optional<VideoDTO> obtenerPorId(Long id);
+    VideoDTO guardarVideo(VideoDTO videoDTO);
     void eliminarVideo(Long id);
 }

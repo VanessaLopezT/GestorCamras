@@ -1,13 +1,14 @@
 package com.example.gestorcamras.service;
 
-import com.example.gestorcamras.model.Rol;
+
+import com.example.gestorcamras.dto.RolDTO;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface RolService {
-    List<Rol> obtenerTodos();
-    Optional<Rol> obtenerPorId(Long id);
-    Rol guardarRol(Rol rol);
+    List<RolDTO> obtenerTodos();
+    Optional<RolDTO> obtenerPorId(Long id);
+    RolDTO guardarRol(RolDTO rolDTO);
     void eliminarRol(Long id);
 }

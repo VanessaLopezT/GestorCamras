@@ -1,12 +1,12 @@
 package com.example.gestorcamras.service;
 
-import com.example.gestorcamras.model.Usuario;
+import com.example.gestorcamras.dto.UsuarioDTO;
 import java.util.List;
 import java.util.Optional;
 
 public interface UsuarioService {
-    List<Usuario> obtenerTodos();
-    Optional<Usuario> obtenerPorId(Long id);
-    Usuario guardarUsuario(Usuario usuario);
+    List<UsuarioDTO> obtenerTodos();
+    Optional<UsuarioDTO> obtenerPorId(Long id);
+    UsuarioDTO guardarUsuario(UsuarioDTO usuarioDTO);
     void eliminarUsuario(Long id);
 }
