@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <title>Usuarios</title>
+</head>
+<body>
+<h2>Usuarios del sistema</h2>
+<a href="/ADMINISTRADOR/usuarios/nuevo">Nuevo Usuario</a>
+<table border="1">
+  <thead>
+  <tr><th>ID</th><th>Correo</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr>
+  </thead>
+  <tbody>
+  <tr th:each="usuario : ${usuarios}">
+    <td th:text="${usuario.idUsuario}"></td>
+    <td th:text="${usuario.correo}"></td>
+    <td th:text="${usuario.nombre}"></td>
+    <td th:text="${usuario.rol.nombre}"></td>
+    <td>
+      + <a th:href="@{|/ADMINISTRADOR/usuarios/editar/${usuario.idUsuario}|}">Editar</a> |
+      + <a th:href="@{|/ADMINISTRADOR/usuarios/eliminar/${usuario.idUsuario}|}">Eliminar</a>
+    </td>
+  </tr>
+  </tbody>
+</table>
+<a th:href="@{/dashboard}">Volver</a>
+</body>
+</html>

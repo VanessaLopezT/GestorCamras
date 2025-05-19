@@ -44,6 +44,11 @@ public class DataInitializer {
             admin.setFechaRegistro(LocalDateTime.now());
 
             usuarioRepository.save(admin);
+            Usuario adminGuardado = usuarioRepository.save(admin);
+            System.out.println("Usuario Por defecto guardado con ID: " + adminGuardado.getIdUsuario());
+
+        }
+        else{ System.out.println("Usuario Por defecto ya existe");
         }
     }
 

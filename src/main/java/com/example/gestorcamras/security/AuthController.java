@@ -62,7 +62,7 @@ public class AuthController {
         nuevo.setContrasena(passwordEncoder.encode(dto.getContrasena()));
         nuevo.setFechaRegistro(LocalDateTime.now());
         nuevo.setRol(rol);
-  
+
         usuarioRepository.save(nuevo);
         return ResponseEntity.ok("Usuario registrado correctamente");
     }

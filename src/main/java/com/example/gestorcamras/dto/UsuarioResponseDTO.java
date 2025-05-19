@@ -9,5 +9,4 @@ public class UsuarioResponseDTO {
     private String nombre;
     private String correo;
     private LocalDateTime fechaRegistro;
-    private String rolNombre;
 }
