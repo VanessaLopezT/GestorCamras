@@ -6,6 +6,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 
+import java.awt.image.BufferedImage;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,4 +27,5 @@ private String descripcion;
 
 @OneToMany(mappedBy = "filtro")
 private List<ImagenProcesada> imagenesProcesadas;
+
 }

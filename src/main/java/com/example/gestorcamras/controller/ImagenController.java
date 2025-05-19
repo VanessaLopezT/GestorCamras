@@ -1,9 +1,12 @@
 package com.example.gestorcamras.controller;
 
+import com.example.gestorcamras.dto.FiltroDTO;
 import com.example.gestorcamras.dto.ImagenDTO;
+import com.example.gestorcamras.dto.ImagenProcesadaDTO;
 import com.example.gestorcamras.model.Imagen;
 import com.example.gestorcamras.service.ImagenService;
 
+import com.example.gestorcamras.service.ProcesadorImagenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +21,10 @@ public class ImagenController {
 
     @Autowired
     private ImagenService imagenService;
+
+    @Autowired
+    private ProcesadorImagenService procesadorImagenService;
+
 
     // Convertir entidad a DTO
     private ImagenDTO convertirADTO(Imagen imagen) {
@@ -114,6 +121,26 @@ public class ImagenController {
                 .stream()
                 .map(this::convertirADTO)
                 .collect(Collectors.toList());
+    }
+
+
+    @PostMapping("/{id}/procesar")
+    public ResponseEntity<ImagenProcesadaDTO> procesarImagen(
+            @PathVariable Long id,
+            @RequestBody FiltroDTO filtroDTO) {
+
+        Optional<Imagen> imagenOpt = imagenService.obtenerPorId(id);
+
+        if (imagenOpt.isPresent()) {
+            ImagenDTO imagenDTO = convertirADTO(imagenOpt.get());
+            ImagenProcesadaDTO resultado = procesadorImagenService.procesarImagen(
+                    imagenDTO,
+                    filtroDTO
+            );
+            return ResponseEntity.ok(resultado);
+        }
+        return ResponseEntity.notFound().build();
+
     }
 
 }
