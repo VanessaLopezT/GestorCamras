@@ -32,6 +32,8 @@ private LocalDateTime fechaRegistro;
 @JoinColumn(name = "rol_id")
 private Rol rol;
 
+private String Nombrerol;
+
 @OneToMany(mappedBy = "propietario")
 private List<Camara> camaras;
 

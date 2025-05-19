@@ -11,4 +11,6 @@ public class UsuarioDTO {
     private String contrasena; // Puedes omitir en respuestas o cifrar
     private LocalDateTime fechaRegistro;
     private Long rolId;
+
+
 }

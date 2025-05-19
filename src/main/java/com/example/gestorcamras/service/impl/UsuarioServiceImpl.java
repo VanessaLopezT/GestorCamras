@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,6 +17,9 @@ import java.util.Optional;
 
 @Service
 public class UsuarioServiceImpl implements UsuarioService {
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     private UsuarioDTO toDTO(Usuario usuario) {
         UsuarioDTO dto = new UsuarioDTO();
@@ -58,6 +62,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     @CachePut(value = "usuario", key = "#usuario.idUsuario")
     public UsuarioDTO guardarUsuario(UsuarioDTO usuarioDTO) {
         Usuario usuario = toEntity(usuarioDTO);
+        usuario.setContrasena(passwordEncoder.encode(usuarioDTO.getContrasena()));
         Usuario guardado = usuarioRepository.save(usuario);
         return toDTO(guardado);
     }

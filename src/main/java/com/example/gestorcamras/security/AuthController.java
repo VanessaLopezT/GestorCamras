@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.example.gestorcamras.model.Usuario;
+import com.example.gestorcamras.repository.RolRepository;
 import com.example.gestorcamras.repository.UsuarioRepository;
 
 import java.time.LocalDateTime;
@@ -32,6 +34,9 @@ public class AuthController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private RolRepository rolRepository;
+
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody AuthRequest request) {
         Authentication auth = authenticationManager.authenticate(
@@ -41,23 +46,25 @@ public class AuthController {
     }
 
     @PostMapping("/register")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<String> register(@RequestBody UsuarioDTO dto) {
         if (usuarioRepository.findByCorreo(dto.getCorreo()).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Correo ya registrado");
         }
+
+        Rol rol = rolRepository.findById(dto.getRolId())
+                .orElseThrow(() -> new RuntimeException("Rol no encontrado con ID: " + dto.getRolId()));
+
 
         Usuario nuevo = new Usuario();
         nuevo.setCorreo(dto.getCorreo());
         nuevo.setNombre(dto.getNombre());
         nuevo.setContrasena(passwordEncoder.encode(dto.getContrasena()));
         nuevo.setFechaRegistro(LocalDateTime.now());
-
-        // asignar rol por defecto, por ejemplo: USUARIO
-        Rol rol = new Rol();
-        rol.setIdRol(2L); // o buscar por nombre
         nuevo.setRol(rol);
-
+  
         usuarioRepository.save(nuevo);
         return ResponseEntity.ok("Usuario registrado correctamente");
     }
+
 }
