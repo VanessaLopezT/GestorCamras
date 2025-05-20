@@ -1,7 +1,8 @@
 package com.example.gestorcamras.dto;
 
-import lombok.Data;
 import java.time.LocalDateTime;
+
+import lombok.Data;
 
 @Data
 public class UsuarioDTO {
@@ -11,6 +12,5 @@ public class UsuarioDTO {
     private String contrasena; // Puedes omitir en respuestas o cifrar
     private LocalDateTime fechaRegistro;
     private Long rolId;
-
-
+    private String nombreRol;
 }

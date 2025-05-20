@@ -10,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 public class RegistroEquipoRequest {
     private String nombreEquipo;
-    private String ipAsignada;
+    private String ip;
     private double latitud;
     private double longitud;
     private String direccion; // opcional

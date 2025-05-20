@@ -3,13 +3,13 @@ package com.example.gestorcamras.Escritorio;
 public class EquipoDTO {
     private Long idEquipo;
     private String nombreEquipo;
-    private String ipAsignada;
+    private String ip;
 
     // constructor
-    public EquipoDTO(Long idEquipo, String nombreEquipo, String ipAsignada) {
+    public EquipoDTO(Long idEquipo, String nombreEquipo, String ip) {
         this.idEquipo = idEquipo;
         this.nombreEquipo = nombreEquipo;
-        this.ipAsignada = ipAsignada;
+        this.ip = ip;
     }
 
     public Long getIdEquipo() {
@@ -20,12 +20,12 @@ public class EquipoDTO {
         return nombreEquipo;
     }
 
-    public String getIpAsignada() {
-        return ipAsignada;
+    public String getIp() {
+        return ip;
     }
 
     @Override
     public String toString() {
-        return nombreEquipo + " (" + ipAsignada + ")";
+        return nombreEquipo + " (" + ip + ")";
     }
 }

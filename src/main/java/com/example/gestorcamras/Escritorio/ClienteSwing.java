@@ -1,51 +1,53 @@
 package com.example.gestorcamras.Escritorio;
 
-import lombok.Getter;
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.Timer;
+import java.util.TimerTask;
+
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import lombok.Setter;
-import org.opencv.core.Core;
-import org.opencv.core.MatOfByte;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import org.opencv.core.Mat;
-import org.opencv.videoio.VideoCapture;
-import org.opencv.imgcodecs.Imgcodecs;
-import java.util.concurrent.*;
-
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.io.*;
-import java.net.*;
-import java.nio.charset.StandardCharsets;
-
-import javax.swing.filechooser.FileNameExtensionFilter;
-import javax.swing.DefaultListModel;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 public class ClienteSwing extends JFrame {
-
+    private static final long serialVersionUID = 1L;
+    
     private JTextField txtServidorUrl;
     private JTextField txtEquipoId;
     private DefaultListModel<String> modeloCamaras;
     private JList<String> listaCamaras;
     private JTextArea txtLog;
 
-    private File archivoSeleccionado; // archivo que se selecciona (imagen o video)
+    private File archivoSeleccionado;
+    private Timer timerPing;
 
-    // --- Variable para guardar cookie de sesión ---
     @Setter
     private String cookieSesion;
 
@@ -61,6 +63,7 @@ public class ClienteSwing extends JFrame {
         setLocationRelativeTo(null);
 
         initUI();
+        iniciarPing();
     }
 
     private void initUI() {
@@ -117,25 +120,87 @@ public class ClienteSwing extends JFrame {
 
         add(panel);
 
-        // Listeners básicos (más adelante implementaremos lógica)
-        btnCargarCamaras.addActionListener(e -> cargarCamarasSimuladas());
-
+        // Listeners
+        btnCargarCamaras.addActionListener(e -> cargarCamaras());
         btnSeleccionarImagen.addActionListener(e -> seleccionarArchivo("imagen"));
-
         btnSeleccionarVideo.addActionListener(e -> seleccionarArchivo("video"));
-
         btnEnviarImagen.addActionListener(e -> enviarArchivo("imagen"));
-
         btnEnviarVideo.addActionListener(e -> enviarArchivo("video"));
     }
 
-    private void cargarCamarasSimuladas() {
-        modeloCamaras.clear();
-        // Por ahora simulamos 3 cámaras
-        modeloCamaras.addElement("Cámara 1");
-        modeloCamaras.addElement("Cámara 2");
-        modeloCamaras.addElement("Cámara 3");
-        log("Cámaras simuladas cargadas.");
+    private void iniciarPing() {
+        timerPing = new Timer();
+        timerPing.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                enviarPing();
+            }
+        }, 0, 30000); // Ping cada 30 segundos
+    }
+
+    private void enviarPing() {
+        String equipoId = txtEquipoId.getText().trim();
+        if (equipoId.isEmpty()) {
+            log("No se puede enviar ping: ID de equipo no especificado");
+            return;
+        }
+
+        try {
+            URL url = new URL(txtServidorUrl.getText().trim() + "/api/equipos/" + equipoId + "/ping");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Cookie", cookieSesion);
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                log("Ping enviado correctamente");
+            } else {
+                log("Error al enviar ping. Código: " + responseCode);
+            }
+        } catch (Exception e) {
+            log("Error al enviar ping: " + e.getMessage());
+        }
+    }
+
+    private void cargarCamaras() {
+        String equipoId = txtEquipoId.getText().trim();
+        if (equipoId.isEmpty()) {
+            log("Debe especificar un ID de equipo");
+            return;
+        }
+
+        try {
+            URL url = new URL(txtServidorUrl.getText().trim() + "/api/equipos/" + equipoId);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Cookie", cookieSesion);
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+                br.close();
+
+                JSONObject obj = new JSONObject(sb.toString());
+                JSONArray camaras = obj.getJSONArray("camaras");
+                
+                modeloCamaras.clear();
+                for (int i = 0; i < camaras.length(); i++) {
+                    JSONObject camara = camaras.getJSONObject(i);
+                    modeloCamaras.addElement(camara.getString("nombre"));
+                }
+                
+                log("Cámaras cargadas correctamente");
+            } else {
+                log("Error al cargar cámaras. Código: " + responseCode);
+            }
+        } catch (Exception e) {
+            log("Error al cargar cámaras: " + e.getMessage());
+        }
     }
 
     private void seleccionarArchivo(String tipo) {
@@ -145,53 +210,6 @@ public class ClienteSwing extends JFrame {
             archivoSeleccionado = chooser.getSelectedFile();
             log("Archivo seleccionado para " + tipo + ": " + archivoSeleccionado.getAbsolutePath());
         }
-    }
-
-    private void log(String mensaje) {
-        txtLog.append(mensaje + "\n");
-        txtLog.setCaretPosition(txtLog.getDocument().getLength());
-    }
-
-    // Método para hacer login y guardar cookie
-    private boolean hacerLogin(String usuario, String password) {
-        try {
-            URL url = new URL(txtServidorUrl.getText().trim() + "/login");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setInstanceFollowRedirects(false); // para capturar cookie
-
-            // Construimos datos de formulario: username=...&password=...
-            String params = "username=" + URLEncoder.encode(usuario, "UTF-8") +
-                    "&password=" + URLEncoder.encode(password, "UTF-8");
-
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            conn.setRequestProperty("Content-Length", String.valueOf(params.length()));
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(params.getBytes(StandardCharsets.UTF_8));
-            }
-
-            int responseCode = conn.getResponseCode();
-
-            if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_OK) {
-                // Capturamos la cookie JSESSIONID del header "Set-Cookie"
-                String headerCookies = conn.getHeaderField("Set-Cookie");
-                if (headerCookies != null) {
-                    for (String cookie : headerCookies.split(";")) {
-                        if (cookie.startsWith("JSESSIONID")) {
-                            cookieSesion = cookie;
-                            log("Login exitoso. Cookie sesión guardada: " + cookieSesion);
-                            return true;
-                        }
-                    }
-                }
-            }
-            log("Login fallido. Código HTTP: " + responseCode);
-        } catch (Exception e) {
-            log("Error en login: " + e.getMessage());
-        }
-        return false;
     }
 
     private void enviarArchivo(String tipo) {
@@ -205,13 +223,6 @@ public class ClienteSwing extends JFrame {
 
         if (servidorUrl.isEmpty() || equipoId.isEmpty() || camaraSeleccionada == null) {
             log("Error: Debes ingresar URL servidor, equipo y seleccionar cámara.");
-            return;
-        }
-
-        // Verificamos que estemos logueados
-        if (cookieSesion == null) {
-            // No permitir enviar si no está logueado, mostrar mensaje de login
-            log("No se pudo enviar: no hay sesión activa. Por favor, relogin.");
             return;
         }
 
@@ -236,7 +247,7 @@ public class ClienteSwing extends JFrame {
                 writer.append("--").append(boundary).append("\r\n");
                 writer.append("Content-Disposition: form-data; name=\"tipo\"\r\n");
                 writer.append("Content-Type: text/plain; charset=UTF-8\r\n\r\n");
-                writer.append(tipo).append("\r\n");
+                writer.append(tipo.toUpperCase()).append("\r\n");
                 writer.flush();
 
                 // Parte: nombre cámara
@@ -289,5 +300,16 @@ public class ClienteSwing extends JFrame {
         }
     }
 
+    private void log(String mensaje) {
+        txtLog.append(LocalDateTime.now().toString() + " - " + mensaje + "\n");
+        txtLog.setCaretPosition(txtLog.getDocument().getLength());
+    }
 
+    @Override
+    public void dispose() {
+        if (timerPing != null) {
+            timerPing.cancel();
+        }
+        super.dispose();
+    }
 }

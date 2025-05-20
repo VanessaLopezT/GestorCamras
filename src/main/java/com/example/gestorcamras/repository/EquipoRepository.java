@@ -13,14 +13,11 @@ import java.util.Optional;
 public interface EquipoRepository extends JpaRepository<Equipo, Long> {
 
     // Buscar equipos por nombre (ejemplo de método adicional)
-    List<Equipo> findByNombreEquipoContainingIgnoreCase(String nombreEquipo);
+    List<Equipo> findByNombreContainingIgnoreCase(String nombre);
 
     @EntityGraph(attributePaths = {"camaras"})
     Optional<Equipo> findById(Long id); // sobreescribe findById
 
-    // Buscar equipos registrados después de una fecha dada
-    List<Equipo> findByFechaRegistroAfter(LocalDateTime fecha);
-
     // Verificar si existe un equipo por IP asignada (único)
-    boolean existsByIpAsignada(String ipAsignada);
+    boolean existsByIp(String ip);
 }

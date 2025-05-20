@@ -1,13 +1,13 @@
 package com.example.gestorcamras.dto;
 
-import lombok.Data;
-
 import java.time.LocalDateTime;
-import java.util.List;
+
+import lombok.Data;
 
 @Data
 public class EstadoEquipoDTO {
-    private String ip;
     private LocalDateTime timestamp;
-    private List<EstadoCamaraDTO> estadoCamaras;
+    private Boolean activo;
+    private String estado;
+    private String mensaje;
 }

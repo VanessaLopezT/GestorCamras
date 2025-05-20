@@ -9,7 +9,7 @@ import java.util.List;
 public class EquipoDetalleDTO {
     private Long idEquipo;
     private String nombreEquipo;
-    private String ipAsignada;
+    private String ip;
     private LocalDateTime fechaRegistro;
 
     private UbicacionDTO ubicacion;

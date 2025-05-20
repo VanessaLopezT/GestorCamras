@@ -35,16 +35,17 @@ public class EstadoEquipoController {
             return ResponseEntity.notFound().build();
         }
         Equipo equipo = equipoOpt.get();
-        equipo.setUltimoPing(estadoDTO.getTimestamp());
-        equipoService.guardarEntidad(equipo); // crea un método para guardar entidad también
+        equipo.setUltimaConexion(estadoDTO.getTimestamp());
+        equipo.setActivo(estadoDTO.getActivo() != null ? estadoDTO.getActivo() : true);
 
-// Convertir entidad a DTO y llamar guardarEquipo con DTO
+        equipoService.guardarEntidad(equipo);
+
         EquipoDTO dto = new EquipoDTO();
         dto.setIdEquipo(equipo.getIdEquipo());
-        dto.setNombreEquipo(equipo.getNombreEquipo());
-        dto.setIpAsignada(equipo.getIpAsignada());
-        dto.setFechaRegistro(equipo.getFechaRegistro());
-// Si agregaste campo ultimoPing en DTO, ponlo también aquí
+        dto.setNombre(equipo.getNombre());
+        dto.setIp(equipo.getIp());
+        dto.setUltimaConexion(equipo.getUltimaConexion());
+        dto.setActivo(equipo.getActivo());
 
         equipoService.guardarEquipo(dto);
 

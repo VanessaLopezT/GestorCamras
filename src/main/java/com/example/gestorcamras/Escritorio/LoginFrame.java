@@ -1,22 +1,28 @@
 package com.example.gestorcamras.Escritorio;
 
-import org.json.JSONObject;
-
-import java.awt.*;
-import java.awt.image.BufferedImage;
+import java.awt.Color;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import javax.imageio.ImageIO;
-import javax.swing.*;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
-public class LoginFrame extends JFrame{
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPasswordField;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 
+import org.json.JSONObject;
+
+public class LoginFrame extends JFrame {
+    private static final long serialVersionUID = 1L;
     private JTextField tfUsuario;
     private JPasswordField pfClave;
     private JButton btnLogin;
@@ -111,15 +117,13 @@ public class LoginFrame extends JFrame{
                     }
                 }
 
-
                 if (cookieSesion[0] == null) {
                     lbEstado.setText("Error al obtener cookie de sesión.");
                     return;
                 }
 
-
                 // Ahora consultamos rol con cookie para validar OPERADOR
-                URL urlUser = new URL("http://localhost:8080/api/usuario");
+                URL urlUser = new URL("http://localhost:8080/api/usuario/actual");
                 HttpURLConnection connUser = (HttpURLConnection) urlUser.openConnection();
                 connUser.setRequestMethod("GET");
                 connUser.setRequestProperty("Cookie", cookieSesion[0]);
@@ -134,9 +138,14 @@ public class LoginFrame extends JFrame{
                     }
                     br.close();
 
-                    JSONObject obj = new JSONObject(sb.toString());
-                    String rol = obj.optString("rol", "");
-                    if ("OPERADOR".equalsIgnoreCase(rol)) {
+                    String jsonResponse = sb.toString();
+                    System.out.println("Respuesta del servidor: " + jsonResponse); // Debug
+
+                    JSONObject obj = new JSONObject(jsonResponse);
+                    
+                    // Verificar si el usuario tiene el rol OPERADOR por nombre
+                    String nombreRol = obj.optString("nombreRol", "");
+                    if ("OPERADOR".equalsIgnoreCase(nombreRol)) {
                         SwingUtilities.invokeLater(() -> {
                             ClienteSwing cliente = new ClienteSwing(usuario, cookieSesion[0]);
                             cliente.setVisible(true);
@@ -144,16 +153,28 @@ public class LoginFrame extends JFrame{
                         dispose();
                         return;
                     } else {
-                        lbEstado.setText("No autorizado: usuario no es OPERADOR.");
+                        lbEstado.setText("No autorizado: usuario no es OPERADOR. Rol actual: " + nombreRol);
                     }
                 } else {
-                    lbEstado.setText("Error al obtener información del usuario.");
+                    lbEstado.setText("Error al obtener información del usuario. Código: " + respUser);
+                    // Leer el mensaje de error si existe
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(connUser.getErrorStream()))) {
+                        StringBuilder errorMsg = new StringBuilder();
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            errorMsg.append(line);
+                        }
+                        if (errorMsg.length() > 0) {
+                            System.out.println("Error del servidor: " + errorMsg.toString()); // Debug
+                            lbEstado.setText("Error: " + errorMsg.toString());
+                        }
+                    } catch (Exception e) {
+                        System.out.println("Error al leer mensaje de error: " + e.getMessage()); // Debug
+                    }
                 }
-
             } else {
                 lbEstado.setText("Credenciales inválidas.");
             }
-
         } catch (Exception ex) {
             lbEstado.setText("Error de conexión: " + ex.getMessage());
         }

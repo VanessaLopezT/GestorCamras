@@ -1,32 +1,51 @@
 package com.example.gestorcamras.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import lombok.AllArgsConstructor;
+import java.util.HashSet;
+import java.util.Set;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.Table;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Entity
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
+@Entity
+@Table(name = "equipo")
 public class Equipo {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long idEquipo;
 
-    private String nombreEquipo;
+    @Column(nullable = false, unique = true)
+    private String nombre;
 
-    private String ipAsignada;
+    @Column(nullable = false, unique = true)
+    private String identificador; // Identificador único del equipo
 
-    private LocalDateTime fechaRegistro;
+    @Column(nullable = false)
+    private String ip;
 
-    private LocalDateTime ultimoPing;
+    @Column(nullable = false)
+    private Integer puerto;
 
-    @OneToMany(mappedBy = "equipo", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<Camara> camaras = new ArrayList<>();
+    @Column(nullable = false)
+    private LocalDateTime ultimaConexion;
 
+    @Column(nullable = false)
+    private Boolean activo;
+
+    @ManyToMany
+    @JoinTable(
+        name = "equipo_camara",
+        joinColumns = @JoinColumn(name = "equipo_id"),
+        inverseJoinColumns = @JoinColumn(name = "camara_id")
+    )
+    private Set<Camara> camaras = new HashSet<>();
 }

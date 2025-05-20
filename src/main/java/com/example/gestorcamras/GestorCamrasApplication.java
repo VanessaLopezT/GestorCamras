@@ -30,9 +30,10 @@ public class GestorCamrasApplication {
         if (!GraphicsEnvironment.isHeadless()) {
             SwingUtilities.invokeLater(() -> {
                 new LoginFrame().setVisible(true);
-
+                new ServidorUI().setVisible(true);
             });
-        } else {
+        }
+        else {
             System.out.println("No hay entorno gráfico, no se lanza interfaz Swing.");
         }
     }

@@ -20,7 +20,6 @@ import java.util.List;
 public class ServidorUI extends JFrame {
 
     private final String BASE_URL = "http://localhost:8080/api"; // Cambiar si es necesario
-    private String cookieSesion;
 
     private JList<String> listaEquipos;
     private DefaultListModel<String> modeloListaEquipos;
@@ -75,87 +74,12 @@ public class ServidorUI extends JFrame {
             }
         });
 
-        // Inicio con login (en SwingUtilities.invokeLater para evitar bloquear UI)
+
         SwingUtilities.invokeLater(() -> {
-            boolean loginOk = false;
-            while (!loginOk) {
-                Credentials cred = pedirCredenciales();
-                if (cred == null) {
-                    log("Login cancelado. Cerrando aplicación.");
-                    System.exit(0);
-                }
-                loginOk = hacerLogin(cred.usuario, cred.password);
-                if (!loginOk) {
-                    JOptionPane.showMessageDialog(this, "Usuario o contraseña incorrectos", "Error de Login", JOptionPane.ERROR_MESSAGE);
-                }
-            }
             cargarEquipos();
         });
+
     }
-
-    private Credentials pedirCredenciales() {
-        JPanel panel = new JPanel(new GridLayout(2, 2));
-        panel.add(new JLabel("Usuario:"));
-        JTextField txtUsuario = new JTextField();
-        panel.add(txtUsuario);
-        panel.add(new JLabel("Contraseña:"));
-        JPasswordField txtPassword = new JPasswordField();
-        panel.add(txtPassword);
-
-        int result = JOptionPane.showConfirmDialog(this, panel, "Login",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-
-        if (result == JOptionPane.OK_OPTION) {
-            String usuario = txtUsuario.getText();
-            String password = new String(txtPassword.getPassword());
-            if (usuario.isEmpty() || password.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Debe ingresar usuario y contraseña", "Error", JOptionPane.ERROR_MESSAGE);
-                return null;
-            }
-            return new Credentials(usuario, password);
-        }
-        return null;
-    }
-
-    private boolean hacerLogin(String usuario, String password) {
-        try {
-            URL url = new URL("http://localhost:8080/login");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-            conn.setInstanceFollowRedirects(false); // para capturar cookie
-
-            String params = "username=" + URLEncoder.encode(usuario, StandardCharsets.UTF_8.name())
-                    + "&password=" + URLEncoder.encode(password, StandardCharsets.UTF_8.name());
-
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            conn.setRequestProperty("Content-Length", String.valueOf(params.length()));
-
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(params.getBytes(StandardCharsets.UTF_8));
-            }
-
-            int responseCode = conn.getResponseCode();
-
-            if (responseCode == HttpURLConnection.HTTP_MOVED_TEMP || responseCode == HttpURLConnection.HTTP_OK) {
-                String headerCookies = conn.getHeaderField("Set-Cookie");
-                if (headerCookies != null) {
-                    for (String cookie : headerCookies.split(";")) {
-                        if (cookie.trim().startsWith("JSESSIONID")) {
-                            cookieSesion = cookie.trim();
-                            log("Login exitoso. Cookie sesión guardada: " + cookieSesion);
-                            return true;
-                        }
-                    }
-                }
-            }
-            log("Login fallido. Código HTTP: " + responseCode);
-        } catch (Exception e) {
-            log("Error en login: " + e.getMessage());
-        }
-        return false;
-    }
-
     private void cargarEquipos() {
         try {
             equiposCache.clear();
@@ -165,9 +89,7 @@ public class ServidorUI extends JFrame {
             URL url = new URL(BASE_URL + "/equipos");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
-            if (cookieSesion != null) {
-                conn.setRequestProperty("Cookie", cookieSesion);
-            }
+            conn.setRequestProperty("Accept", "application/json");
 
             int code = conn.getResponseCode();
             if (code == 200) {
@@ -189,9 +111,6 @@ public class ServidorUI extends JFrame {
                     modeloListaEquipos.addElement(nombre);
                 }
                 log("Equipos cargados: " + jsonEquipos.length());
-            } else if (code == 401) {
-                log("No autorizado. Debe iniciar sesión.");
-                // Podrías forzar un nuevo login si quieres
             } else {
                 log("Error cargando equipos: HTTP " + code);
             }
@@ -200,7 +119,6 @@ public class ServidorUI extends JFrame {
             ex.printStackTrace();
         }
     }
-
     private void cargarCamaras(Long equipoId) {
         try {
             modeloTablaCamaras.setRowCount(0);
@@ -209,9 +127,7 @@ public class ServidorUI extends JFrame {
             URL url = new URL(BASE_URL + "/equipos/" + equipoId + "/camaras");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
-            if (cookieSesion != null) {
-                conn.setRequestProperty("Cookie", cookieSesion);
-            }
+            conn.setRequestProperty("Accept", "application/json"); // <-- buena práctica
 
             int code = conn.getResponseCode();
             if (code == 200) {
@@ -242,6 +158,7 @@ public class ServidorUI extends JFrame {
             ex.printStackTrace();
         }
     }
+
 
     private void log(String mensaje) {
         areaLogs.append(mensaje + "\n");

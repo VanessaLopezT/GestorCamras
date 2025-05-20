@@ -1,16 +1,18 @@
 package com.example.gestorcamras.controller;
 
-import com.example.gestorcamras.dto.EquipoConCamarasDTO;
-import com.example.gestorcamras.dto.EquipoDTO;
 import java.util.List;
 
-import com.example.gestorcamras.dto.EquipoDetalleDTO;
-import com.example.gestorcamras.dto.RegistroEquipoRequest;
-import com.example.gestorcamras.service.EquipoService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.example.gestorcamras.dto.EquipoDTO;
+import com.example.gestorcamras.service.EquipoService;
 
 @RestController
 @RequestMapping("/api/equipos")
@@ -20,61 +22,32 @@ public class EquipoController {
     private EquipoService equipoService;
 
     @GetMapping
-    public List<EquipoDTO> listarEquipos(@RequestParam(required = false) String nombre) {
-        if (nombre != null && !nombre.isEmpty()) {
-            return equipoService.buscarPorNombre(nombre);
-        } else {
+    public List<EquipoDTO> obtenerTodos() {
             return equipoService.obtenerTodos();
-        }
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<EquipoDetalleDTO> obtenerDetalle(@PathVariable Long id) {
-        return equipoService.obtenerDetallePorId(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    // Método alternativo para obtener EquipoDTO simple, con ruta distinta
-    @GetMapping("/simple/{id}")
-    public ResponseEntity<EquipoDTO> obtenerEquipoSimplePorId(@PathVariable Long id) {
+    public EquipoDTO obtenerPorId(@PathVariable Long id) {
         return equipoService.obtenerPorId(id)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new RuntimeException("Equipo no encontrado"));
     }
 
-    @PostMapping
-    public ResponseEntity<EquipoDTO> crearEquipo(@RequestBody EquipoDTO equipoDTO) {
-        EquipoDTO guardado = equipoService.guardarEquipo(equipoDTO);
-        return ResponseEntity.ok(guardado);
+    @PostMapping("/registrar")
+    public EquipoDTO registrarEquipo(@RequestBody EquipoDTO equipoDTO) {
+        return equipoService.registrarEquipo(equipoDTO);
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<EquipoDTO> registrarEquipo(@RequestBody RegistroEquipoRequest request) {
-        EquipoDTO registrado = equipoService.registrarEquipoConCamaras(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(registrado);
+    @PostMapping("/{id}/ping")
+    public ResponseEntity<Void> actualizarPing(@PathVariable Long id) {
+        equipoService.actualizarPing(id);
+        return ResponseEntity.ok().build();
     }
 
-    // Dejamos solo un método PUT para actualizar con cámaras
-    @PutMapping("/{id}")
-    public ResponseEntity<EquipoDTO> actualizarEquipo(
-            @PathVariable Long id,
-            @RequestBody EquipoConCamarasDTO dto) {
-        try {
-            EquipoDTO actualizado = equipoService.actualizarEquipoConCamaras(id, dto);
-            return ResponseEntity.ok(actualizado);
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> eliminarEquipo(@PathVariable Long id) {
-        try {
-            equipoService.eliminarEquipo(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+    @PostMapping("/{idEquipo}/camaras/{idCamara}")
+    public ResponseEntity<Void> asignarCamara(
+            @PathVariable Long idEquipo,
+            @PathVariable Long idCamara) {
+        equipoService.asignarCamara(idEquipo, idCamara);
+        return ResponseEntity.ok().build();
     }
 }
