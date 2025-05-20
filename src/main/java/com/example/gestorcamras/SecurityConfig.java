@@ -47,9 +47,11 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
+                .csrf(csrf -> csrf.disable()) // importante para permitir POST JSON desde el escritorio
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
                         .requestMatchers("/", "/login", "/error").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll() // 🔓 permite login desde escritorio
                         .requestMatchers("/ADMINISTRADOR/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated()
                 )

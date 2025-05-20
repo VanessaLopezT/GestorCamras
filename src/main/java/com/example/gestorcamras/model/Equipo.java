@@ -2,6 +2,7 @@ package com.example.gestorcamras.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -23,6 +24,9 @@ public class Equipo {
 
     private LocalDateTime fechaRegistro;
 
-    @OneToMany(mappedBy = "equipo", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Camara> camaras;
+    private LocalDateTime ultimoPing;
+
+    @OneToMany(mappedBy = "equipo", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Camara> camaras = new ArrayList<>();
+
 }

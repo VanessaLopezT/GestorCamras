@@ -1,6 +1,8 @@
 package com.example.gestorcamras.service;
 
 import com.example.gestorcamras.dto.CamaraDTO;
+import com.example.gestorcamras.model.Camara;
+import com.example.gestorcamras.model.Equipo;
 
 import java.util.List;
 import java.util.Optional;
@@ -10,6 +12,8 @@ public interface CamaraService {
     Optional<CamaraDTO> obtenerPorId(Long id);
     CamaraDTO guardarCamara(CamaraDTO camaraDTO);
     void eliminarCamara(Long id);
+    Camara toEntity(CamaraDTO dto);
+    Optional<Camara> obtenerPorNombreYEquipo(String nombre, Equipo equipo);
 
     List<CamaraDTO> obtenerPorPropietario(Long idUsuario);
     List<CamaraDTO> obtenerPorUbicacion(Long idUbicacion);

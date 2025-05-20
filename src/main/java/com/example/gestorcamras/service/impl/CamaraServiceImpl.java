@@ -1,8 +1,12 @@
 package com.example.gestorcamras.service.impl;
 
 import com.example.gestorcamras.model.Camara;
+import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.repository.CamaraRepository;
 import com.example.gestorcamras.redis.IRedisCache;
+import com.example.gestorcamras.repository.EquipoRepository;
+import com.example.gestorcamras.repository.UbicacionRepository;
+import com.example.gestorcamras.repository.UsuarioRepository;
 import com.example.gestorcamras.service.CamaraService;
 import com.example.gestorcamras.dto.CamaraDTO;
 import java.util.stream.Collectors;
@@ -20,6 +24,15 @@ public class CamaraServiceImpl implements CamaraService {
 
     @Autowired
     private IRedisCache<Camara> redisCache;
+
+    @Autowired
+    private UbicacionRepository ubicacionRepository;
+
+    @Autowired
+    private EquipoRepository equipoRepository;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository; // Solo si también manejas Propietario
 
     private static final String PREFIX_CACHE = "camara_";
 
@@ -39,7 +52,13 @@ public class CamaraServiceImpl implements CamaraService {
         return dto;
     }
 
-    private Camara toEntity(CamaraDTO dto) {
+    @Override
+    public Optional<Camara> obtenerPorNombreYEquipo(String nombre, Equipo equipo) {
+        return camaraRepository.findByNombreAndEquipo(nombre, equipo);
+    }
+
+
+    public Camara toEntity(CamaraDTO dto) {
         if (dto == null) return null;
         Camara camara = new Camara();
         camara.setIdCamara(dto.getIdCamara());
@@ -48,10 +67,25 @@ public class CamaraServiceImpl implements CamaraService {
         camara.setActiva(dto.isActiva());
         camara.setTipo(dto.getTipo());
         camara.setFechaRegistro(dto.getFechaRegistro());
-        // Las relaciones (Ubicacion, Propietario, Equipo) deben ser resueltas en un paso adicional si es necesario
-        camara.setUbicacion(null);
-        camara.setPropietario(null);
-        camara.setEquipo(null);
+
+        // Asociar Ubicacion
+        if (dto.getUbicacionId() != null) {
+            ubicacionRepository.findById(dto.getUbicacionId())
+                    .ifPresent(camara::setUbicacion);
+        }
+
+// Asociar Equipo
+        if (dto.getEquipoId() != null) {
+            equipoRepository.findById(dto.getEquipoId())
+                    .ifPresent(camara::setEquipo);
+        }
+
+// Asociar Propietario (si aplica)
+        if (dto.getPropietarioId() != null) {
+            usuarioRepository.findById(dto.getPropietarioId())
+                    .ifPresent(camara::setPropietario);
+        }
+
         return camara;
     }
 

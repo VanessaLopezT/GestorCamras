@@ -59,6 +59,13 @@ public class VideoServiceImpl implements VideoService {
     }
 
     @Override
+    public VideoDTO guardarVideo(Video video) {
+        Video guardado = videoRepository.save(video);
+        return toDTO(guardado);
+    }
+
+
+    @Override
     public void eliminarVideo(Long id) {
         videoRepository.deleteById(id);
     }

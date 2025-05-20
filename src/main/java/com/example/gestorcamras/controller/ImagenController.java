@@ -3,14 +3,24 @@ package com.example.gestorcamras.controller;
 import com.example.gestorcamras.dto.FiltroDTO;
 import com.example.gestorcamras.dto.ImagenDTO;
 import com.example.gestorcamras.dto.ImagenProcesadaDTO;
+import com.example.gestorcamras.model.Camara;
+import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.model.Imagen;
+import com.example.gestorcamras.service.CamaraService;
+import com.example.gestorcamras.service.EquipoService;
 import com.example.gestorcamras.service.ImagenService;
 
 import com.example.gestorcamras.service.ProcesadorImagenService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -24,6 +34,12 @@ public class ImagenController {
 
     @Autowired
     private ProcesadorImagenService procesadorImagenService;
+
+    @Autowired
+    private CamaraService camaraService;
+
+    @Autowired
+    private EquipoService equipoService;
 
 
     // Convertir entidad a DTO
@@ -142,5 +158,54 @@ public class ImagenController {
         return ResponseEntity.notFound().build();
 
     }
+
+    @PostMapping("/equipos/{equipoId}/imagenes")
+    public ResponseEntity<ImagenDTO> subirImagenEquipo(
+            @PathVariable Long equipoId,
+            @RequestParam("archivo") MultipartFile archivo,
+            @RequestParam("nombreCamara") String nombreCamara,
+            @RequestParam("timestamp") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime timestamp
+    ) {
+        // 1. Validar archivo no vacío
+        if (archivo.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // 2. Buscar equipo y cámara (ejemplo rápido, deberías manejar si no existen)
+        Optional<Equipo> equipoOpt = equipoService.obtenerEntidadPorId(equipoId);
+        if (equipoOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        Equipo equipo = equipoOpt.get();
+
+        Optional<Camara> camaraOpt = camaraService.obtenerPorNombreYEquipo(nombreCamara, equipo);
+        if (camaraOpt.isEmpty()) {
+            return ResponseEntity.badRequest().body(null);
+        }
+        Camara camara = camaraOpt.get();
+
+        // 3. Guardar archivo en disco (ejemplo simple, cambia ruta según tu configuración)
+        String rutaAlmacenamiento = "/ruta/imagenes/" + archivo.getOriginalFilename();
+        try {
+            archivo.transferTo(new File(rutaAlmacenamiento));
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+
+        // 4. Crear entidad Imagen y guardar en BD
+        Imagen imagen = new Imagen();
+        imagen.setNombre(archivo.getOriginalFilename());
+        imagen.setTamaño(archivo.getSize());
+        imagen.setFechaCaptura(timestamp);
+        imagen.setRutaAlmacenamiento(rutaAlmacenamiento);
+        imagen.setCamara(camara);
+
+        Imagen imagenGuardada = imagenService.guardarImagen(imagen);
+
+        // 5. Convertir a DTO y retornar
+        ImagenDTO dto = convertirADTO(imagenGuardada);
+        return ResponseEntity.status(HttpStatus.CREATED).body(dto);
+    }
+
 
 }

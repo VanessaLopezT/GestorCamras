@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CamaraRepository extends JpaRepository<Camara, Long> {
@@ -16,6 +17,9 @@ public interface CamaraRepository extends JpaRepository<Camara, Long> {
     List<Camara> findByActiva(boolean activa);
 
     List<Camara> findByPropietario(Usuario propietario);
+
+    Optional<Camara> findByNombreAndEquipo(String nombre, Equipo equipo);
+
 
     // Método que usa el service: buscar por idUsuario en propietario
     List<Camara> findByPropietarioIdUsuario(Long idUsuario);
