@@ -19,7 +19,7 @@ import java.util.List;
 
 public class ServidorUI extends JFrame {
 
-    private final String BASE_URL = "http://localhost:8080/api"; // Cambiar si es necesario
+    private final String BASE_URL = "http://0.0.0.0:8080/api"; // Esto no funcionará en cliente, es para binding, no URL de llamada
 
     private JList<String> listaEquipos;
     private DefaultListModel<String> modeloListaEquipos;
@@ -101,16 +101,26 @@ public class ServidorUI extends JFrame {
                 }
                 in.close();
 
-                JSONArray jsonEquipos = new JSONArray(responseSb.toString());
-                for (int i = 0; i < jsonEquipos.length(); i++) {
-                    JSONObject obj = jsonEquipos.getJSONObject(i);
-                    Long idEquipo = obj.getLong("idEquipo");
-                    String nombre = obj.getString("nombre");
-                    EquipoDTO equipo = new EquipoDTO(idEquipo, nombre);
-                    equiposCache.add(equipo);
-                    modeloListaEquipos.addElement(nombre);
+                String respuesta = responseSb.toString();
+                log("Respuesta recibida: " + respuesta);
+
+                try {
+                    JSONArray jsonEquipos = new JSONArray(respuesta);
+                    for (int i = 0; i < jsonEquipos.length(); i++) {
+                        JSONObject obj = jsonEquipos.getJSONObject(i);
+                        Long idEquipo = obj.getLong("idEquipo");
+                        String nombre = obj.getString("nombre");
+                        EquipoDTO equipo = new EquipoDTO(idEquipo, nombre);
+                        equiposCache.add(equipo);
+                        modeloListaEquipos.addElement(nombre);
+                    }
+                    log("Equipos cargados: " + jsonEquipos.length());
+                } catch (org.json.JSONException jsonEx) {
+                    log("La respuesta no es un JSON válido. Probablemente no autenticado.");
+                    log("Respuesta completa: " + respuesta);
+                    // Aquí podrías mostrar un diálogo para pedir login o avisar al usuario
                 }
-                log("Equipos cargados: " + jsonEquipos.length());
+
             } else {
                 log("Error cargando equipos: HTTP " + code);
             }
@@ -119,6 +129,7 @@ public class ServidorUI extends JFrame {
             ex.printStackTrace();
         }
     }
+
     private void cargarCamaras(Long equipoId) {
         try {
             modeloTablaCamaras.setRowCount(0);

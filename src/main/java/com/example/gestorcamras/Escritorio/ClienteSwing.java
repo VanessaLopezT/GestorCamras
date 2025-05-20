@@ -72,7 +72,9 @@ public class ClienteSwing extends JFrame {
         // Panel superior para URL y equipo
         JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panelArriba.add(new JLabel("Servidor URL:"));
-        txtServidorUrl = new JTextField("http://localhost:8080", 20);
+
+        txtServidorUrl = new JTextField("http://192.168.1.15:8080", 20);
+
         panelArriba.add(txtServidorUrl);
 
         panelArriba.add(new JLabel("Equipo ID:"));
@@ -81,6 +83,9 @@ public class ClienteSwing extends JFrame {
 
         JButton btnCargarCamaras = new JButton("Cargar cámaras");
         panelArriba.add(btnCargarCamaras);
+
+        JButton btnprobarConexionServidor = new JButton("Probar conexión");
+        panelArriba.add(btnprobarConexionServidor);
 
         panel.add(panelArriba, BorderLayout.NORTH);
 
@@ -121,6 +126,8 @@ public class ClienteSwing extends JFrame {
         add(panel);
 
         // Listeners
+
+        btnprobarConexionServidor.addActionListener(e -> probarConexionServidor());
         btnCargarCamaras.addActionListener(e -> cargarCamaras());
         btnSeleccionarImagen.addActionListener(e -> seleccionarArchivo("imagen"));
         btnSeleccionarVideo.addActionListener(e -> seleccionarArchivo("video"));
@@ -129,6 +136,7 @@ public class ClienteSwing extends JFrame {
     }
 
     private void iniciarPing() {
+        log("Iniciando tarea de ping...");
         timerPing = new Timer();
         timerPing.scheduleAtFixedRate(new TimerTask() {
             @Override
@@ -185,15 +193,27 @@ public class ClienteSwing extends JFrame {
                 }
                 br.close();
 
-                JSONObject obj = new JSONObject(sb.toString());
-                JSONArray camaras = obj.getJSONArray("camaras");
-                
+                String respuesta = sb.toString();
+                log("Respuesta JSON: " + respuesta);  // DEBUG
+
+                JSONObject obj = new JSONObject(respuesta);
+                Object camarasObj = obj.get("camaras");
+
                 modeloCamaras.clear();
-                for (int i = 0; i < camaras.length(); i++) {
-                    JSONObject camara = camaras.getJSONObject(i);
+
+                if (camarasObj instanceof JSONArray) {
+                    JSONArray camaras = (JSONArray) camarasObj;
+                    for (int i = 0; i < camaras.length(); i++) {
+                        JSONObject camara = camaras.getJSONObject(i);
+                        modeloCamaras.addElement(camara.getString("nombre"));
+                    }
+                } else if (camarasObj instanceof JSONObject) {
+                    JSONObject camara = (JSONObject) camarasObj;
                     modeloCamaras.addElement(camara.getString("nombre"));
+                } else {
+                    log("El campo 'camaras' no contiene cámaras o tiene un formato inesperado");
                 }
-                
+
                 log("Cámaras cargadas correctamente");
             } else {
                 log("Error al cargar cámaras. Código: " + responseCode);
@@ -202,6 +222,7 @@ public class ClienteSwing extends JFrame {
             log("Error al cargar cámaras: " + e.getMessage());
         }
     }
+
 
     private void seleccionarArchivo(String tipo) {
         JFileChooser chooser = new JFileChooser();
@@ -312,4 +333,26 @@ public class ClienteSwing extends JFrame {
         }
         super.dispose();
     }
+
+    private void probarConexionServidor() {
+        String servidorUrl = txtServidorUrl.getText().trim();
+        try {
+            URL url = new URL(servidorUrl + "/api/equipos");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+
+            // Agrega esta línea:
+            conn.setRequestProperty("Cookie", cookieSesion);
+
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                log("Conexión exitosa al servidor.");
+            } else {
+                log("Error al conectar con servidor. Código HTTP: " + code);
+            }
+        } catch (Exception e) {
+            log("Excepción en conexión con servidor: " + e.getMessage());
+        }
+    }
+
 }

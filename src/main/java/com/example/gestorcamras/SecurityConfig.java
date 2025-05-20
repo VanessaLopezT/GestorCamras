@@ -13,7 +13,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
-@EnableGlobalMethodSecurity(prePostEnabled = true)
+@EnableGlobalMethodSecurity(prePostEnabled = true)  // no olvides esta anotación arriba
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -47,11 +47,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         return http
-                .csrf(csrf -> csrf.disable()) // importante para permitir POST JSON desde el escritorio
+                .csrf(csrf -> csrf.disable()) // para clientes REST
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/css/**", "/js/**", "/images/**").permitAll()
                         .requestMatchers("/", "/login", "/error").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll() // 🔓 permite login desde escritorio
+                        .requestMatchers("/api/auth/**").permitAll()  // login / registro vía API sin auth
+                        .requestMatchers("/api/**").hasRole("OPERADOR") // solo usuarios con OPERADOR para el API REST
                         .requestMatchers("/ADMINISTRADOR/**").hasRole("ADMINISTRADOR")
                         .anyRequest().authenticated()
                 )
@@ -63,6 +64,4 @@ public class SecurityConfig {
                 .logout(logout -> logout.logoutSuccessUrl("/login?logout").permitAll())
                 .build();
     }
-
-
 }

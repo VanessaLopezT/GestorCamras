@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.gestorcamras.dto.EquipoDTO;
 import com.example.gestorcamras.service.EquipoService;
-
 @RestController
 @RequestMapping("/api/equipos")
 public class EquipoController {
@@ -23,7 +22,7 @@ public class EquipoController {
 
     @GetMapping
     public List<EquipoDTO> obtenerTodos() {
-            return equipoService.obtenerTodos();
+        return equipoService.obtenerTodos();
     }
 
     @GetMapping("/{id}")
