@@ -32,7 +32,9 @@
         <tanzu-scg-extensions.version>1.0.0</tanzu-scg-extensions.version>
     </properties>
     <dependencies>
-        
+
+
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -163,7 +165,7 @@
                 <encoding>UTF-8</encoding>
             </configuration>
         </plugin>
-        
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
