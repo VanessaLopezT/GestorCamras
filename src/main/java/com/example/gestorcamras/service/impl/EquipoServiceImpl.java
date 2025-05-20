@@ -162,6 +162,7 @@ public class EquipoServiceImpl implements EquipoService {
 
 
     @Override
+    @Transactional
     public Optional<EquipoDetalleDTO> obtenerDetallePorId(Long idEquipo) {
         return equipoRepository.findById(idEquipo).map(equipo -> {
             EquipoDetalleDTO dto = new EquipoDetalleDTO();

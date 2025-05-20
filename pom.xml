@@ -54,6 +54,14 @@
         </dependency>
 
         <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>opencv-platform</artifactId>
+            <version>4.5.5-1.5.7</version>
+        </dependency>
+
+
+
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
@@ -111,6 +119,11 @@
             <scope>runtime</scope>
         </dependency>
 
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20240303</version>
+        </dependency>
 
     </dependencies>
     <dependencyManagement>
@@ -152,10 +165,22 @@
                 <scope>runtime</scope>
             </dependency>
             -->
+            <dependency>
+                <groupId>org.bytedeco</groupId>
+                <artifactId>opencv-platform</artifactId>
+                <version>4.5.5-1.5.7</version>
+            </dependency>
 
         </dependencies>
-    </dependencyManagement>
 
+
+    </dependencyManagement>
+    <repositories>
+        <repository>
+            <id>nu-pattern-repo</id>
+            <url>https://raw.githubusercontent.com/PatternConsulting/maven-public/main</url>
+        </repository>
+    </repositories>
     <build>
         <plugins>
         <plugin>
