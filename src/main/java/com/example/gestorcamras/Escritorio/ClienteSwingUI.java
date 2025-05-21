@@ -29,7 +29,7 @@ public class ClienteSwingUI extends JFrame {
     private static final long serialVersionUID = 1L;
     
     private JTextField txtServidorUrl;
-    private JTextField txtEquipoId;
+    private String equipoIdGenerado;  // Para almacenar el ID del equipo generado
     private DefaultListModel<String> modeloCamaras;
     private JList<String> listaCamaras;
     private JTextArea txtLog;
@@ -93,9 +93,9 @@ public class ClienteSwingUI extends JFrame {
         }
         panelArriba.add(txtServidorUrl);
 
-        panelArriba.add(new JLabel("Equipo ID:"));
-        txtEquipoId = new JTextField(5);
-        panelArriba.add(txtEquipoId);
+        // Etiqueta para mostrar el ID del equipo (solo lectura)
+        equipoIdLabel = new JLabel("ID Equipo: Generando...");
+        panelArriba.add(equipoIdLabel);
 
         JButton btnCargarCamaras = new JButton("Cargar cámaras");
         btnCargarCamaras.addActionListener(e -> cargarCamaras());
@@ -180,41 +180,61 @@ public class ClienteSwingUI extends JFrame {
     }
     
     private void cargarCamaras() {
-        String equipoId = txtEquipoId.getText().trim();
-        if (equipoId.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Debe especificar un ID de equipo", "Error", JOptionPane.ERROR_MESSAGE);
+        // Si ya tenemos un ID de equipo generado, usarlo
+        if (equipoIdGenerado != null && !equipoIdGenerado.isEmpty()) {
+            cargarCamarasConEquipo(equipoIdGenerado);
             return;
+        }
+        
+        // Si no hay ID generado, registramos un nuevo equipo
+        registrarNuevoEquipo();
+    }
+    
+    private void registrarNuevoEquipo() {
+        controller.registrarEquipo(id -> {
+            if (id != null) {
+                equipoIdGenerado = id;
+                log("Equipo registrado con ID: " + id);
+                cargarCamarasConEquipo(id);
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "No se pudo registrar el equipo. Intente nuevamente.", 
+                    "Error", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+    
+    private JLabel equipoIdLabel; // Add this as a class field
+
+    private void cargarCamarasConEquipo(String equipoId) {
+        // Update the equipment ID label if it exists
+        if (equipoIdLabel != null) {
+            equipoIdLabel.setText("ID Equipo: " + equipoId);
         }
         
         // Limpiar el modelo de cámaras
         modeloCamaras.clear();
         
-        // Registrar el equipo si no existe
-        controller.registrarEquipo(id -> {
-            if (id != null) {
-                txtEquipoId.setText(id);
-                
-                // Cargar las cámaras después de registrar el equipo
-                controller.cargarCamaras(id, camaras -> {
-                    // Actualizar la interfaz de usuario en el hilo de eventos de Swing
-                    SwingUtilities.invokeLater(() -> {
-                        if (camaras != null && camaras.length() > 0) {
-                            for (int i = 0; i < camaras.length(); i++) {
-                                JSONObject camara = camaras.getJSONObject(i);
-                                modeloCamaras.addElement(camara.getString("nombre"));
-                            }
-                        } else {
-                            // Si no hay cámaras, intentar registrar una cámara local
-                            controller.registrarCamaraLocal(id, camaraId -> {
-                                if (camaraId != null) {
-                                    // Recargar las cámaras después de registrar una nueva
-                                    cargarCamaras();
-                                }
-                            });
+        // Cargar las cámaras del equipo
+        controller.cargarCamaras(equipoId, camaras -> {
+            // Actualizar la interfaz de usuario en el hilo de eventos de Swing
+            SwingUtilities.invokeLater(() -> {
+                if (camaras != null && camaras.length() > 0) {
+                    for (int i = 0; i < camaras.length(); i++) {
+                        JSONObject camara = camaras.getJSONObject(i);
+                        modeloCamaras.addElement(camara.getString("nombre"));
+                    }
+                } else {
+                    // Si no hay cámaras, intentar registrar una cámara local
+                    controller.registrarCamaraLocal(equipoId, camaraId -> {
+                        if (camaraId != null) {
+                            // Recargar las cámaras después de registrar una nueva
+                            cargarCamaras();
                         }
                     });
-                });
-            }
+                }
+            });
         });
     }
     
@@ -228,7 +248,11 @@ public class ClienteSwingUI extends JFrame {
     }
     
     private void enviarArchivo(String tipo) {
-        String equipoId = txtEquipoId.getText().trim();
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            log("Error: No hay un equipo registrado. Carga las cámaras primero.");
+            return;
+        }
+        
         String camaraSeleccionada = listaCamaras.getSelectedValue();
         
         if (archivoSeleccionado == null) {
@@ -236,12 +260,12 @@ public class ClienteSwingUI extends JFrame {
             return;
         }
         
-        if (equipoId.isEmpty() || camaraSeleccionada == null) {
-            log("Error: Debes especificar equipo y seleccionar cámara.");
+        if (camaraSeleccionada == null) {
+            log("Error: Debes seleccionar una cámara.");
             return;
         }
         
-        controller.enviarArchivo(equipoId, camaraSeleccionada, archivoSeleccionado, tipo);
+        controller.enviarArchivo(equipoIdGenerado, camaraSeleccionada, archivoSeleccionado, tipo);
     }
     
     private void log(String mensaje) {

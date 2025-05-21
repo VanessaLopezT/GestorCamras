@@ -73,26 +73,31 @@ public class LoginFrame extends JFrame {
     }
 
     private void loginUsuarioDefault() {
-        // Limpiar cualquier mensaje de error previo
-        lbEstado.setText("");
-        
-        // Establecer las credenciales por defecto
-        tfUsuario.setText("oper@gestor.com");
-        pfClave.setText("oper123");
-        
-        // Forzar la actualización de la UI antes de iniciar sesión
-        tfUsuario.paintImmediately(tfUsuario.getVisibleRect());
-        pfClave.paintImmediately(pfClave.getVisibleRect());
-        
-        // Pequeña pausa para asegurar que la UI se actualice
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        // Iniciar sesión
-        login();
+        // Actualizar la UI en el hilo de eventos
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // Limpiar cualquier mensaje de error previo
+                lbEstado.setText("");
+                
+                // Establecer las credenciales por defecto
+                tfUsuario.setText("oper@gestor.com");
+                pfClave.setText("oper123");
+                
+                // Forzar la actualización de la UI
+                tfUsuario.repaint();
+                pfClave.repaint();
+                
+                // Usar un temporizador para iniciar sesión después de que la UI se actualice
+                javax.swing.Timer timer = new javax.swing.Timer(100, e -> {
+                    login();
+                });
+                timer.setRepeats(false);
+                timer.start();
+            } catch (Exception ex) {
+                lbEstado.setText("Error al configurar credenciales: " + ex.getMessage());
+                ex.printStackTrace();
+            }
+        });
     }
 
     private void login() {
