@@ -9,21 +9,21 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.net.InetAddress;
-import java.net.URI;
 import java.net.URLConnection;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.CookieManager;
-import java.net.CookiePolicy;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.Arrays;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.Inet4Address;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.*;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
+import java.nio.charset.StandardCharsets;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -43,6 +43,9 @@ public class ClienteSwingController {
         // Inicializar servicios
         this.camaraService = new ClienteCamaraService(this.servidorUrl, this.cookieSesion);
         this.equipoService = new ClienteEquipoService(this.servidorUrl, this.cookieSesion);
+        
+        // Configurar el logger para el servicio de equipos
+        this.equipoService.setLogger(this::log);
     }
 
     public void setLogConsumer(Consumer<String> logConsumer) {
@@ -97,197 +100,245 @@ public class ClienteSwingController {
         }
     }
 
+    /**
+     * Busca un equipo por su dirección IP utilizando el servicio de equipos
+     * @param ip Dirección IP a buscar
+     * @param equipoIdConsumer Callback que recibe el ID del equipo si se encuentra
+     * @return true si la búsqueda se inició correctamente, false en caso de error
+     */
     public boolean buscarEquipoPorIp(String ip, Consumer<String> equipoIdConsumer) {
         try {
-            HttpClient client = HttpClient.newBuilder()
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
-                    
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(servidorUrl + "/api/equipos/ip/" + ip))
-                    .header("Cookie", cookieSesion)
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build();
-
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            int responseCode = response.statusCode();
-            String responseBody = response.body();
-            
-            log(String.format("Respuesta de buscarEquipoPorIp - Código: %d, Cuerpo: %s", responseCode, responseBody));
-
-            if (responseCode == 200) {
-                try {
-                    JSONObject responseJson = new JSONObject(responseBody);
-                    // Intentar obtener el ID de diferentes maneras según el formato de respuesta
-                    String idEquipo = "";
-                    
-                    // Verificar diferentes formatos de respuesta
-                    if (responseJson.has("idEquipo")) {
-                        // Formato: {"idEquipo":5, ...}
-                        idEquipo = String.valueOf(responseJson.getInt("idEquipo"));
-                    } else if (responseJson.has("id")) {
-                        // Formato: {"id":"5", ...}
-                        idEquipo = responseJson.optString("id", "");
-                    } else if (responseJson.has("content") && responseJson.get("content") instanceof JSONArray) {
-                        // Formato paginado: {"content":[{"idEquipo":5, ...}], ...}
-                        JSONArray content = responseJson.getJSONArray("content");
-                        if (content.length() > 0) {
-                            JSONObject equipo = content.getJSONObject(0);
-                            if (equipo.has("idEquipo")) {
-                                idEquipo = String.valueOf(equipo.getInt("idEquipo"));
-                            } else {
-                                idEquipo = equipo.optString("id", "");
-                            }
-                        }
-                    }
-                    
-                    if (!idEquipo.isEmpty()) {
-                        log("Equipo encontrado con ID: " + idEquipo);
-                        if (equipoIdConsumer != null) {
-                            equipoIdConsumer.accept(idEquipo);
-                        }
-                        return true;
-                    } else {
-                        log("No se pudo extraer el ID del equipo de la respuesta. Formato inesperado.");
-                        log("Respuesta completa: " + responseBody);
-                        return false;
-                    }
-                } catch (Exception e) {
-                    log("Error al procesar la respuesta del equipo: " + e.getMessage());
-                    return false;
-                }
-            } else if (responseCode == 404) {
-                log("No se encontró equipo para la IP: " + ip);
-                return false;
-            } else if (responseCode == 302) {
-                log("Redirección detectada al buscar equipo. La sesión pudo haber expirado.");
-                return false;
-            } else {
-                log("Error al buscar equipo. Código: " + responseCode + ", Respuesta: " + responseBody);
+            if (ip == null || ip.trim().isEmpty()) {
+                log("Error: La dirección IP no puede estar vacía");
+                if (equipoIdConsumer != null) equipoIdConsumer.accept(null);
                 return false;
             }
-        } catch (Exception ex) {
-            log("Error en buscarEquipoPorIp: " + ex.getMessage());
+            
+            log("Buscando equipo con IP: " + ip);
+            
+            // Usar el servicio de equipos para buscar por IP
+            equipoService.buscarEquipoPorIp(ip, equipoId -> {
+                if (equipoId != null && !equipoId.isEmpty()) {
+                    log("Equipo encontrado con ID: " + equipoId);
+                    // Si se proporcionó un consumidor, pasarle el ID del equipo
+                    if (equipoIdConsumer != null) {
+                        equipoIdConsumer.accept(equipoId);
+                    }
+                } else {
+                    log("No se encontró un equipo con la IP: " + ip);
+                    if (equipoIdConsumer != null) {
+                        equipoIdConsumer.accept(null);
+                    }
+                }
+            }, this::log);
+            
+            return true; // La operación se inició correctamente
+            
+        } catch (Exception e) {
+            log("Error al buscar equipo por IP: " + e.getMessage());
+            e.printStackTrace();
+            if (equipoIdConsumer != null) {
+                equipoIdConsumer.accept(null);
+            }
             return false;
         }
     }
 
+    /**
+     * Obtiene la dirección IP más adecuada para identificar este equipo en la red
+     * @return La dirección IP preferida o "127.0.0.1" si no se puede determinar
+     */
     private String obtenerDireccionIP() {
         try {
-            return InetAddress.getLocalHost().getHostAddress();
+            // Primero intentar con la IP del host local
+            String localIP = InetAddress.getLocalHost().getHostAddress();
+            
+            // Lista de prefijos de IP a excluir (redes virtuales, locales, etc.)
+            String[] excludedPrefixes = {
+                "127.",          // Loopback
+                "192.168.56.",   // VirtualBox
+                "169.254.",      // Link-local
+                "172.16.", "172.17.", "172.18.", "172.19.", "172.20.",
+                "172.21.", "172.22.", "172.23.", "172.24.", "172.25.",
+                "172.26.", "172.27.", "172.28.", "172.29.", "172.30.", "172.31.", // Privadas clase B
+                "10.",           // Privadas clase A
+                "192.168."        // Privadas clase C
+            };
+            
+            // Verificar si la IP local es adecuada
+            if (esIPValida(localIP, excludedPrefixes)) {
+                log("Usando dirección IP local: " + localIP);
+                return localIP;
+            }
+            
+            // Si la IP local no es adecuada, buscar en todas las interfaces de red
+            log("Buscando dirección IP en interfaces de red...");
+            List<String> posiblesIPs = new ArrayList<>();
+            
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                
+                // Filtrar interfaces no adecuadas
+                if (!esInterfazValida(iface)) {
+                    continue;
+                }
+                
+                // Buscar direcciones IPv4 en esta interfaz
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
+                        String ip = addr.getHostAddress();
+                        
+                        // Si es una IP válida, agregarla a la lista
+                        if (esIPValida(ip, excludedPrefixes)) {
+                            log("Dirección IP candidata: " + ip + " en " + iface.getDisplayName());
+                            posiblesIPs.add(ip);
+                        }
+                    }
+                }
+            }
+            
+            // Si encontramos IPs válidas, devolver la primera
+            if (!posiblesIPs.isEmpty()) {
+                String ipSeleccionada = posiblesIPs.get(0);
+                log("Seleccionada dirección IP: " + ipSeleccionada);
+                return ipSeleccionada;
+            }
+            
+            // Si no se encuentra ninguna IP adecuada, usar la local con advertencia
+            log("ADVERTENCIA: No se encontró una IP de red adecuada, usando " + localIP);
+            return localIP;
+            
         } catch (Exception e) {
-            log("Error al obtener la dirección IP: " + e.getMessage());
+            String errorMsg = "Error al obtener la dirección IP: " + e.getMessage();
+            log(errorMsg);
             return "127.0.0.1";
         }
     }
 
+    /**
+     * Registra un nuevo equipo en el servidor o reutiliza uno existente con la misma IP
+     * @param equipoIdConsumer Callback que se llama con el ID del equipo registrado o existente
+     */
     public void registrarEquipo(Consumer<String> equipoIdConsumer) {
+        if (equipoIdConsumer == null) {
+            log("Error: El callback de equipoIdConsumer no puede ser nulo");
+            return;
+        }
+        
         try {
+            // Obtener la dirección IP del equipo
             String ip = obtenerDireccionIP();
             log("Buscando equipo existente para IP: " + ip);
             
+            // Verificar si ya hay una cookie de sesión
+            if (cookieSesion == null || cookieSesion.isEmpty()) {
+                log("Error: No hay una sesión activa para registrar el equipo");
+                equipoIdConsumer.accept(null);
+                return;
+            }
+            
             // Primero buscar si existe un equipo con esta IP
             buscarEquipoPorIp(ip, existingEquipoId -> {
-                if (existingEquipoId != null && !existingEquipoId.isEmpty()) {
-                    log("Usando equipo existente con ID: " + existingEquipoId);
-                    if (equipoIdConsumer != null) {
-                        equipoIdConsumer.accept(existingEquipoId);
-                        iniciarPing();
-                    }
-                    return;
-                }
-
-                // Si no existe, proceder con el registro
                 try {
-                    String nombreEquipo = "EQ_" + ip.replace('.', '_') + "_" + System.currentTimeMillis();
-                    String jsonBody = String.format(
-                        "{\"nombre\":\"Equipo %s\",\"identificador\":\"%s\",\"ip\":\"%s\",\"puerto\":8080}",
-                        nombreEquipo, nombreEquipo, ip
-                    );
+                    if (existingEquipoId != null && !existingEquipoId.isEmpty()) {
+                        log("Usando equipo existente con ID: " + existingEquipoId);
+                        // Iniciar el ping para mantener la conexión activa
+                        iniciarPing();
+                        // Notificar al consumidor
+                        equipoIdConsumer.accept(existingEquipoId);
+                        return;
+                    }
 
-                    log("Registrando nuevo equipo: " + jsonBody);
+                    // Si no existe, proceder con el registro
+                    log("No se encontró un equipo existente para la IP: " + ip);
                     
+                    // Generar un nombre único para el equipo
+                    String timestamp = String.valueOf(System.currentTimeMillis());
+                    String nombreEquipo = "EQ_" + ip.replace('.', '_') + "_" + timestamp;
+                    
+                    // Crear el cuerpo de la petición
+                    JSONObject jsonBody = new JSONObject();
+                    jsonBody.put("nombre", "Equipo " + nombreEquipo);
+                    jsonBody.put("identificador", nombreEquipo);
+                    jsonBody.put("ip", ip);
+                    jsonBody.put("puerto", 8080);
+                    
+                    log("Registrando nuevo equipo: " + jsonBody.toString());
+                    
+                    // Configurar el cliente HTTP
                     HttpClient client = HttpClient.newBuilder()
+                            .version(HttpClient.Version.HTTP_1_1)
                             .followRedirects(HttpClient.Redirect.NORMAL)
                             .build();
-
+                            
+                    // Crear la petición de registro
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(URI.create(servidorUrl + "/api/equipos/registrar"))
                             .header("Content-Type", "application/json")
-                            .header("Accept", "application/json")
                             .header("Cookie", cookieSesion)
-                            .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                            .POST(HttpRequest.BodyPublishers.ofString(jsonBody.toString()))
                             .build();
 
+                    log("Enviando solicitud de registro de equipo...");
                     client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                         .thenAccept(response -> {
                             int statusCode = response.statusCode();
                             String responseBody = response.body();
                             
-                            log(String.format("Respuesta del servidor - Código: %d, Cuerpo: %s", statusCode, responseBody));
-
+                            log(String.format("Respuesta del servidor - Código: %d, Cuerpo: %s", 
+                                statusCode, responseBody));
+                            
                             if (statusCode == 200 || statusCode == 201) {
                                 try {
-                                    String idEquipo = "";
-                                    if (responseBody != null && !responseBody.isEmpty()) {
-                                        JSONObject jsonResponse = new JSONObject(responseBody);
-                                        idEquipo = jsonResponse.optString("idEquipo", "");
-                                        if (idEquipo.isEmpty()) {
-                                            idEquipo = jsonResponse.optString("id", "");
-                                        }
-                                    }
+                                    JSONObject jsonResponse = new JSONObject(responseBody);
+                                    String nuevoEquipoId = jsonResponse.getString("id");
+                                    log("Equipo registrado exitosamente con ID: " + nuevoEquipoId);
                                     
-                                    if (!idEquipo.isEmpty()) {
-                                        log("Equipo registrado exitosamente con ID: " + idEquipo);
-                                        if (equipoIdConsumer != null) {
-                                            equipoIdConsumer.accept(idEquipo);
-                                            iniciarPing();
-                                        }
-                                    } else {
-                                        log("No se pudo obtener el ID del equipo de la respuesta");
-                                        if (equipoIdConsumer != null) {
-                                            equipoIdConsumer.accept(null);
-                                        }
-                                    }
+                                    // Iniciar el ping para mantener la conexión activa
+                                    iniciarPing();
+                                    
+                                    // Notificar al consumidor
+                                    equipoIdConsumer.accept(nuevoEquipoId);
                                 } catch (Exception e) {
                                     log("Error al procesar la respuesta del servidor: " + e.getMessage());
-                                    if (equipoIdConsumer != null) {
-                                        equipoIdConsumer.accept(null);
-                                    }
+                                    equipoIdConsumer.accept(null);
                                 }
                             } else if (statusCode == 302) {
                                 String location = response.headers().firstValue("Location").orElse("");
                                 log("Redirección detectada. Posible sesión expirada: " + location);
-                                if (equipoIdConsumer != null) {
-                                    equipoIdConsumer.accept(null);
-                                }
+                                equipoIdConsumer.accept(null);
                             } else {
                                 log("Error en el servidor. Código: " + statusCode + ", Respuesta: " + responseBody);
-                                if (equipoIdConsumer != null) {
-                                    equipoIdConsumer.accept(null);
-                                }
+                                equipoIdConsumer.accept(null);
                             }
                         })
                         .exceptionally(e -> {
                             log("Error en la solicitud de registro: " + e.getMessage());
-                            if (equipoIdConsumer != null) {
-                                equipoIdConsumer.accept(null);
+                            if (e.getCause() != null) {
+                                log("Causa: " + e.getCause().getMessage());
                             }
+                            equipoIdConsumer.accept(null);
                             return null;
                         });
                 } catch (Exception e) {
-                    log("Error al registrar equipo: " + e.getMessage());
-                    if (equipoIdConsumer != null) {
-                        equipoIdConsumer.accept(null);
+                    String errorMsg = "Error al registrar equipo: " + e.getMessage();
+                    log(errorMsg);
+                    if (e.getCause() != null) {
+                        log("Causa: " + e.getCause().getMessage());
                     }
+                    equipoIdConsumer.accept(null);
                 }
             });
         } catch (Exception e) {
-            log("Error en registrarEquipo: " + e.getMessage());
-            if (equipoIdConsumer != null) {
-                equipoIdConsumer.accept(null);
+            String errorMsg = "Error en registrarEquipo: " + e.getMessage();
+            log(errorMsg);
+            if (e.getCause() != null) {
+                log("Causa: " + e.getCause().getMessage());
             }
+            equipoIdConsumer.accept(null);
         }
     }
 
@@ -309,41 +360,88 @@ public class ClienteSwingController {
         }, 0, 5000);
     }
 
+    /**
+     * Verifica si el servidor está activo y accesible
+     * @return true si el servidor responde correctamente, false en caso contrario
+     */
     public boolean verificarServidorActivo() {
+        // Verificar si la URL del servidor es válida
+        if (servidorUrl == null || servidorUrl.trim().isEmpty()) {
+            log("Error: URL del servidor no configurada");
+            return false;
+        }
+        
+        // Verificar si hay una cookie de sesión
+        if (cookieSesion == null || cookieSesion.trim().isEmpty()) {
+            log("Error: No hay una sesión activa");
+            return false;
+        }
+        
         try {
+            // Configurar el cliente HTTP con un tiempo de espera
             HttpClient client = HttpClient.newBuilder()
+                    .version(HttpClient.Version.HTTP_1_1)
                     .followRedirects(HttpClient.Redirect.NORMAL)
+                    .connectTimeout(Duration.ofSeconds(5))
                     .build();
                     
+            // Crear la petición de ping
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(servidorUrl + "/api/ping"))
+                    .timeout(Duration.ofSeconds(5))
                     .header("Cookie", cookieSesion)
                     .header("Accept", "application/json")
+                    .header("Cache-Control", "no-cache")
                     .GET()
                     .build();
 
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            int responseCode = response.statusCode();
-            String responseBody = response.body();
-
-            // Verificar si hay una redirección (302) y si es a la página de login
-            if (responseCode == 302) {
-                String location = response.headers().firstValue("Location").orElse("");
-                if (location.contains("/login")) {
-                    log("Sesión expirada o no autenticada. Redirigiendo a login...");
+            // Enviar la petición de forma síncrona con un tiempo de espera
+            try {
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                int statusCode = response.statusCode();
+                
+                // Verificar si hay una redirección (302) y si es a la página de login
+                if (statusCode == 302) {
+                    String location = response.headers().firstValue("Location").orElse("");
+                    if (location.contains("/login")) {
+                        log("Sesión expirada o no autenticada. Redirigiendo a login...");
+                        return false;
+                    }
+                }
+                
+                if (statusCode == 200) {
+                    log("Ping exitoso al servidor");
+                    return true;
+                } else {
+                    String responseBody = response.body();
+                    log("Error en la respuesta del servidor. Código: " + statusCode + ", Respuesta: " + responseBody);
                     return false;
                 }
-            }
-
-            if (responseCode == 200) {
-                log("Servidor activo y conectado");
-                return true;
-            } else {
-                log("Error al conectar al servidor. Código: " + responseCode + ", Respuesta: " + responseBody);
+            } catch (java.net.ConnectException e) {
+                log("No se pudo conectar al servidor: " + e.getMessage());
+                return false;
+            } catch (java.net.UnknownHostException e) {
+                log("No se pudo resolver el host del servidor: " + e.getMessage());
+                return false;
+            } catch (java.net.http.HttpTimeoutException e) {
+                log("Tiempo de espera agotado al conectar con el servidor");
+                return false;
+            } catch (java.io.IOException e) {
+                log("Error de E/S al conectar con el servidor: " + e.getMessage());
+                return false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // Restablecer el estado de interrupción
+                log("La operación de ping fue interrumpida");
+                return false;
+            } catch (Exception e) {
+                log("Error inesperado al verificar el servidor: " + e.getMessage());
+                if (e.getCause() != null) {
+                    log("Causa: " + e.getCause().getMessage());
+                }
                 return false;
             }
         } catch (Exception e) {
-            log("Error al verificar conexión: " + e.getMessage());
+            log("Error general al verificar el servidor: " + e.getMessage());
             return false;
         }
     }
@@ -449,47 +547,126 @@ public class ClienteSwingController {
             // Este bloque ya no es necesario aquí
     }
 
+    /**
+     * Registra una cámara local en el servidor
+     * @param equipoId ID del equipo al que pertenece la cámara
+     * @param camaraIdConsumer Callback que se llama con el ID de la cámara registrada
+     */
     public void registrarCamaraLocal(String equipoId, Consumer<Long> camaraIdConsumer) {
         log("Iniciando registro de cámara local...");
+        
+        // Validar parámetros de entrada
+        if (equipoId == null || equipoId.trim().isEmpty()) {
+            log("Error: El ID del equipo no puede estar vacío");
+            if (camaraIdConsumer != null) camaraIdConsumer.accept(null);
+            return;
+        }
+        
         try {
-            camaraService.registrarCamaraLocal(equipoId, camaraIdConsumer, this::log);
+            // Verificar que tenemos una cookie de sesión
+            if (cookieSesion == null || cookieSesion.isEmpty()) {
+                log("Error: No hay una sesión activa");
+                if (camaraIdConsumer != null) camaraIdConsumer.accept(null);
+                return;
+            }
+            
+            log("Registrando cámara local para el equipo: " + equipoId);
+            
+            // Usar el servicio de cámaras para registrar la cámara
+            camaraService.registrarCamaraLocal(equipoId, 
+                idCamara -> {
+                    if (idCamara != null) {
+                        log("Cámara registrada exitosamente con ID: " + idCamara);
+                    } else {
+                        log("No se pudo registrar la cámara");
+                    }
+                    if (camaraIdConsumer != null) {
+                        camaraIdConsumer.accept(idCamara);
+                    }
+                }, 
+                this::log
+            );
         } catch (Exception e) {
-            log("Error al registrar cámara local: " + e.getMessage());
+            String errorMsg = "Error al registrar cámara local: " + e.getMessage();
+            log(errorMsg);
+            e.printStackTrace();
+            if (camaraIdConsumer != null) {
+                camaraIdConsumer.accept(null);
+            }
         }
     }
 
-    private String obtenerDispositivoVideo() {
-        return camaraService.obtenerDispositivoVideo();
-    }
-
+    /**
+     * Asigna una cámara a un equipo en el servidor
+     * @param equipoId ID del equipo al que se asignará la cámara
+     * @param idCamara ID de la cámara a asignar
+     * @param callback Callback que se llama con el resultado de la operación
+     */
     public void asignarCamaraAEquipo(String equipoId, Long idCamara, Consumer<Boolean> callback) {
+        if (equipoId == null || equipoId.trim().isEmpty() || idCamara == null) {
+            log("Error: Parámetros inválidos para asignar cámara al equipo");
+            if (callback != null) callback.accept(false);
+            return;
+        }
+        
+        log(String.format("Asignando cámara %d al equipo %s", idCamara, equipoId));
+        
         try {
-            HttpClient client = HttpClient.newHttpClient();
+            // Validar la cookie de sesión
+            if (cookieSesion == null || cookieSesion.isEmpty()) {
+                log("Error: No hay una sesión activa");
+                if (callback != null) callback.accept(false);
+                return;
+            }
+            
+            HttpClient client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .followRedirects(HttpClient.Redirect.NEVER)
+                .build();
+            
+            String url = String.format("%s/api/equipos/%s/camaras/%d", servidorUrl, equipoId, idCamara);
             
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(servidorUrl + "/api/equipos/" + equipoId + "/camaras/" + idCamara))
-                    .header("Cookie", cookieSesion)
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
+                .uri(URI.create(url))
+                .header("Cookie", cookieSesion)
+                .header("Accept", "application/json")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
 
             client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenAccept(response -> {
                     int responseCode = response.statusCode();
+                    String responseBody = response.body();
+                    
+                    log(String.format("Respuesta al asignar cámara - Código: %d, Cuerpo: %s", 
+                        responseCode, responseBody));
+                    
                     if (responseCode == 200) {
-                        callback.accept(true);
+                        log("Cámara asignada exitosamente al equipo");
+                        if (callback != null) callback.accept(true);
                     } else {
-                        log("Error al asignar cámara al equipo. Código: " + responseCode);
-                        callback.accept(false);
+                        String errorMsg = "Error al asignar cámara al equipo. Código: " + responseCode;
+                        log(errorMsg);
+                        if (callback != null) {
+                            callback.accept(false);
+                        }
                     }
                 })
                 .exceptionally(e -> {
-                    log("Error al asignar cámara al equipo: " + e.getMessage());
-                    callback.accept(false);
+                    String errorMsg = "Error al asignar cámara al equipo: " + e.getMessage();
+                    log(errorMsg);
+                    if (callback != null) {
+                        callback.accept(false);
+                    }
                     return null;
                 });
         } catch (Exception e) {
-            log("Error al asignar cámara al equipo: " + e.getMessage());
-            callback.accept(false);
+            String errorMsg = "Error inesperado al asignar cámara al equipo: " + e.getMessage();
+            log(errorMsg);
+            if (callback != null) {
+                callback.accept(false);
+            }
         }
     }
 
@@ -585,5 +762,76 @@ public class ClienteSwingController {
         if (timerPing != null) {
             timerPing.cancel();
         }
+    }
+    
+    /**
+     * Verifica si una interfaz de red es válida para su uso
+     * @param iface Interfaz de red a verificar
+     * @return true si la interfaz es válida, false en caso contrario
+     */
+    private boolean esInterfazValida(NetworkInterface iface) {
+        if (iface == null) return false;
+        
+        try {
+            // Verificar si la interfaz está activa y no es de loopback
+            if (!iface.isUp() || iface.isLoopback()) {
+                return false;
+            }
+            
+            // Verificar si es una interfaz virtual o de máquina virtual
+            String displayName = iface.getDisplayName().toLowerCase();
+            if (iface.isVirtual() || 
+                displayName.contains("virtual") ||
+                displayName.contains("vmware") ||
+                displayName.contains("virtualbox") ||
+                displayName.contains("tunnel")) {
+                return false;
+            }
+            
+            // Verificar si tiene direcciones IP
+            return iface.getInetAddresses().hasMoreElements();
+            
+        } catch (Exception e) {
+            log("Error al verificar interfaz de red: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Verifica si una dirección IP es válida según los prefijos excluidos
+     * @param ip Dirección IP a verificar
+     * @param excludedPrefixes Lista de prefijos de IP a excluir
+     * @return true si la IP es válida, false en caso contrario
+     */
+    private boolean esIPValida(String ip, String[] excludedPrefixes) {
+        if (ip == null || ip.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Verificar si la IP coincide con alguno de los prefijos excluidos
+        for (String prefix : excludedPrefixes) {
+            if (ip.startsWith(prefix)) {
+                return false;
+            }
+        }
+        
+        // Verificar el formato de la IP usando una expresión regular simple
+        String[] octetos = ip.split("\\.");
+        if (octetos.length != 4) {
+            return false;
+        }
+        
+        try {
+            for (String octetoStr : octetos) {
+                int octeto = Integer.parseInt(octetoStr);
+                if (octeto < 0 || octeto > 255) {
+                    return false;
+                }
+            }
+        } catch (NumberFormatException e) {
+            return false;
+        }
+        
+        return true;
     }
 }
