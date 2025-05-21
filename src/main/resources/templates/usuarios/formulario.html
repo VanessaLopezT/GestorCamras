@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title th:text="${usuario.idUsuario == null} ? 'Crear Usuario' : 'Editar Usuario'">Usuario</title>
+</head>
+<body>
+
+<h2 th:text="${usuario.idUsuario == null} ? 'Crear Usuario' : 'Editar Usuario'"></h2>
+
+<form th:action="@{/ADMINISTRADOR/usuarios/guardar}" th:object="${usuario}" method="post">
+
+    <!-- CAMPO OCULTO PARA idUsuario (SOLO SI ESTÁ EN EDICIÓN) -->
+    <input type="hidden" th:if="${usuario.idUsuario != null}" th:field="*{idUsuario}"/>
+
+    <label>Nombre:</label>
+    <input type="text" th:field="*{nombre}" required/><br>
+
+    <label>Correo:</label>
+    <input type="email" th:field="*{correo}" required/><br>
+
+    <label>Contraseña:</label>
+
+    <!-- CREACIÓN: contraseña obligatoria -->
+    <input type="password" th:field="*{contrasena}" th:if="${usuario.idUsuario == null}" required/><br>
+
+    <!-- EDICIÓN: contraseña opcional -->
+    <input type="password" th:field="*{contrasena}" th:if="${usuario.idUsuario != null}"
+           placeholder="Dejar vacío para mantener la contraseña actual"/><br>
+
+    <label>Rol:</label>
+    <select th:field="*{rol.idRol}">
+        <option th:value="1">ADMINISTRADOR</option>
+        <option th:value="2">OPERADOR</option>
+        <option th:value="3">VISUALIZADOR</option>
+    </select><br>
+
+    <button type="submit">Guardar</button>
+</form>
+
+<a th:href="@{/ADMINISTRADOR/usuarios}">Cancelar</a>
+
+</body>
+</html>
