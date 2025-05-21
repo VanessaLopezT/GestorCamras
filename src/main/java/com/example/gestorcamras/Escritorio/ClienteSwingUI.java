@@ -22,6 +22,7 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 
 import org.json.JSONObject;
 
@@ -97,7 +98,7 @@ public class ClienteSwingUI extends JFrame {
         equipoIdLabel = new JLabel("ID Equipo: Generando...");
         panelArriba.add(equipoIdLabel);
 
-        JButton btnCargarCamaras = new JButton("Cargar cámaras");
+        JButton btnCargarCamaras = new JButton("Cargar cámarass");
         btnCargarCamaras.addActionListener(e -> cargarCamaras());
         panelArriba.add(btnCargarCamaras);
 
@@ -208,7 +209,7 @@ public class ClienteSwingUI extends JFrame {
     private JLabel equipoIdLabel; // Add this as a class field
 
     private void cargarCamarasConEquipo(String equipoId) {
-        // Actualizar el ID del equipo en la interfaz
+        // Actualizar la etiqueta del ID del equipo si existe
         if (equipoIdLabel != null) {
             equipoIdLabel.setText("ID Equipo: " + equipoId);
         }
@@ -216,47 +217,73 @@ public class ClienteSwingUI extends JFrame {
         // Limpiar el modelo de cámaras
         modeloCamaras.clear();
         
-        // Mostrar mensaje de carga
-        log("Cargando cámaras para el equipo: " + equipoId);
+        // Variable para evitar múltiples registros de cámara
+        final boolean[] registroEnCurso = {false};
         
-        // Cargar las cámaras del equipo
-        controller.cargarCamaras(equipoId, camaras -> {
-            // Actualizar la interfaz de usuario en el hilo de eventos de Swing
-            SwingUtilities.invokeLater(() -> {
-                if (camaras != null && camaras.length() > 0) {
-                    log("Se encontraron " + camaras.length() + " cámaras");
-                    for (int i = 0; i < camaras.length(); i++) {
-                        JSONObject camara = camaras.getJSONObject(i);
-                        String nombreCamara = camara.getString("nombre");
-                        modeloCamaras.addElement(nombreCamara);
-                        log("Cámara agregada: " + nombreCamara);
-                    }
-                } else {
-                    log("No se encontraron cámaras. Registrando una nueva cámara local...");
-                    // Si no hay cámaras, intentar registrar una cámara local
-                    controller.registrarCamaraLocal(equipoId, camaraId -> {
-                        if (camaraId != null) {
-                            log("Cámara local registrada con ID: " + camaraId);
-                            // Volver a cargar las cámaras sin recursión
-                            controller.cargarCamaras(equipoId, camarasActualizadas -> {
+        // Clase interna para manejar la carga de cámaras
+        class CargadorCamaras implements Runnable {
+            private final String equipoId;
+            private final boolean[] registroEnCurso;
+            
+            public CargadorCamaras(String equipoId, boolean[] registroEnCurso) {
+                this.equipoId = equipoId;
+                this.registroEnCurso = registroEnCurso;
+            }
+            
+            @Override
+            public void run() {
+                if (registroEnCurso[0]) {
+                    return; // Evitar múltiples llamadas simultáneas
+                }
+                
+                log("Cargando cámaras para el equipo: " + equipoId);
+                controller.cargarCamaras(equipoId, camaras -> {
+                    // Actualizar la interfaz de usuario en el hilo de eventos de Swing
+                    SwingUtilities.invokeLater(() -> {
+                        if (camaras != null && camaras.length() > 0) {
+                            log("Se encontraron " + camaras.length() + " cámaras");
+                            modeloCamaras.clear(); // Limpiar antes de agregar
+                            for (int i = 0; i < camaras.length(); i++) {
+                                try {
+                                    JSONObject camara = camaras.getJSONObject(i);
+                                    String nombreCamara = camara.getString("nombre");
+                                    modeloCamaras.addElement(nombreCamara);
+                                    log("Cámara agregada: " + nombreCamara);
+                                } catch (Exception e) {
+                                    log("Error al procesar la cámara: " + e.getMessage());
+                                }
+                            }
+                            registroEnCurso[0] = false; // Restablecer el estado
+                        } else if (!registroEnCurso[0]) {
+                            log("No se encontraron cámaras. Registrando una nueva cámara local...");
+                            registroEnCurso[0] = true; // Marcar que hay un registro en curso
+                            
+                            // Si no hay cámaras, intentar registrar una cámara local
+                            controller.registrarCamaraLocal(equipoId, camaraId -> {
                                 SwingUtilities.invokeLater(() -> {
-                                    if (camarasActualizadas != null && camarasActualizadas.length() > 0) {
-                                        modeloCamaras.clear();
-                                        for (int i = 0; i < camarasActualizadas.length(); i++) {
-                                            JSONObject camara = camarasActualizadas.getJSONObject(i);
-                                            modeloCamaras.addElement(camara.getString("nombre"));
-                                        }
-                                        log("Cámaras actualizadas correctamente");
+                                    if (camaraId != null) {
+                                        log("Cámara local registrada con ID: " + camaraId);
+                                        // Volver a cargar las cámaras después de un breve retraso
+                                        Timer timer = new Timer(1000, e -> {
+                                            ((Timer)e.getSource()).stop();
+                                            new CargadorCamaras(equipoId, registroEnCurso).run();
+                                        });
+                                        timer.setRepeats(false);
+                                        timer.start();
+                                    } else {
+                                        log("Error al registrar la cámara local");
+                                        registroEnCurso[0] = false; // Restablecer si falla
                                     }
                                 });
                             });
-                        } else {
-                            log("Error al registrar la cámara local");
                         }
                     });
-                }
-            });
-        });
+                });
+            }
+        }
+        
+        // Iniciar la carga de cámaras
+        new CargadorCamaras(equipoId, registroEnCurso).run();
     }
     
     private void seleccionarArchivo(String tipo) {
@@ -307,7 +334,7 @@ public class ClienteSwingUI extends JFrame {
     
     @Override
     public void dispose() {
-        controller.dispose();
+        controller.detener();
         super.dispose();
     }
 }

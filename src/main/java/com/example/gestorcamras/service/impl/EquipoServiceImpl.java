@@ -18,6 +18,7 @@ import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.repository.CamaraRepository;
 import com.example.gestorcamras.repository.EquipoRepository;
+import com.example.gestorcamras.controller.WebSocketController;
 import com.example.gestorcamras.service.EquipoService;
 
 @Service
@@ -28,6 +29,9 @@ public class EquipoServiceImpl implements EquipoService {
 
     @Autowired
     private CamaraRepository camaraRepository;
+    
+    @Autowired
+    private WebSocketController webSocketController;
 
     @Override
     public List<EquipoDTO> obtenerTodos() {
@@ -77,9 +81,19 @@ public class EquipoServiceImpl implements EquipoService {
     @Transactional
     public void actualizarPing(Long id) {
         equipoRepository.findById(id).ifPresent(equipo -> {
+            boolean esNuevaConexion = equipo.getUltimaConexion() == null;
             equipo.setUltimaConexion(LocalDateTime.now());
             equipo.setActivo(true);
             equipoRepository.save(equipo);
+            
+            // Notificar a través de WebSocket
+            EquipoDTO equipoDTO = convertirADTO(equipo);
+            webSocketController.notifyEquipoUpdate(equipoDTO);
+            
+            // Si es la primera vez que se conecta, notificar como nuevo equipo
+            if (esNuevaConexion) {
+                webSocketController.notifyEquipoConnected(equipoDTO);
+            }
         });
     }
 

@@ -142,8 +142,15 @@ public class CamaraServiceImpl implements CamaraService {
 
     @Override
     public List<CamaraDTO> obtenerPorTipo(String tipo) {
-        return camaraRepository.findByTipo(tipo)
-                .stream().map(this::toDTO).collect(Collectors.toList());
+        return camaraRepository.findByTipo(tipo).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+    }
+    
+    @Override
+    public List<CamaraDTO> obtenerPorEquipo(Long idEquipo) {
+        return camaraRepository.findByEquipoIdEquipo(idEquipo).stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 }
-

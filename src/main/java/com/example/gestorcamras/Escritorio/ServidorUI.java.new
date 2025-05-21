@@ -1,0 +1,285 @@
+package com.example.gestorcamras.Escritorio;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.event.ListSelectionEvent;
+import java.awt.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class ServidorUI extends JFrame {
+    private final Map<Long, EquipoDTO> equiposActivos = new HashMap<>();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private static final String SERVER_URL = "http://localhost:8080/api";
+    private static boolean isServerInstance = false;
+
+    private JList<String> listaEquipos;
+    private DefaultListModel<String> modeloListaEquipos;
+    private JTable tablaCamaras;
+    private DefaultTableModel modeloTablaCamaras;
+    private JTextArea areaLogs;
+
+    public ServidorUI() {
+        if (!isServerInstance) {
+            isServerInstance = true;
+        } else {
+            JOptionPane.showMessageDialog(null, "Solo puede haber una instancia del servidor", "Error", JOptionPane.ERROR_MESSAGE);
+            System.exit(0);
+        }
+
+        setTitle("Servidor Gestor de Cámaras");
+        setSize(1000, 700);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLayout(new BorderLayout());
+        setLocationRelativeTo(null);
+
+        // Inicializar componentes de la interfaz
+        inicializarComponentes();
+        
+        // Cargar los equipos iniciales
+        cargarEquipos();
+        
+        // Configurar WebSocket
+        configurarWebSocket();
+    }
+
+    private void inicializarComponentes() {
+        // Panel principal
+        JPanel panelPrincipal = new JPanel(new BorderLayout());
+        
+        // Panel de lista de equipos
+        JPanel panelEquipos = new JPanel(new BorderLayout());
+        panelEquipos.setBorder(BorderFactory.createTitledBorder("Equipos Conectados"));
+        panelEquipos.setPreferredSize(new Dimension(300, 0));
+        
+        modeloListaEquipos = new DefaultListModel<>();
+        listaEquipos = new JList<>(modeloListaEquipos);
+        listaEquipos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        listaEquipos.addListSelectionListener(this::seleccionarEquipo);
+        panelEquipos.add(new JScrollPane(listaEquipos), BorderLayout.CENTER);
+        
+        // Panel de cámaras
+        JPanel panelCamaras = new JPanel(new BorderLayout());
+        panelCamaras.setBorder(BorderFactory.createTitledBorder("Cámaras del Equipo"));
+        
+        modeloTablaCamaras = new DefaultTableModel(
+            new Object[]{"ID", "Nombre", "IP", "Estado"}, 0
+        );
+        tablaCamaras = new JTable(modeloTablaCamaras);
+        panelCamaras.add(new JScrollPane(tablaCamaras), BorderLayout.CENTER);
+        
+        // Panel de logs
+        JPanel panelLogs = new JPanel(new BorderLayout());
+        panelLogs.setBorder(BorderFactory.createTitledBorder("Registros"));
+        panelLogs.setPreferredSize(new Dimension(0, 150));
+        
+        areaLogs = new JTextArea();
+        areaLogs.setEditable(false);
+        panelLogs.add(new JScrollPane(areaLogs), BorderLayout.CENTER);
+        
+        // Organizar paneles
+        JSplitPane splitPanePrincipal = new JSplitPane(
+            JSplitPane.HORIZONTAL_SPLIT,
+            panelEquipos,
+            panelCamaras
+        );
+        splitPanePrincipal.setResizeWeight(0.3);
+        
+        panelPrincipal.add(splitPanePrincipal, BorderLayout.CENTER);
+        panelPrincipal.add(panelLogs, BorderLayout.SOUTH);
+        
+        add(panelPrincipal, BorderLayout.CENTER);
+        
+        // Botón de actualizar
+        JButton btnActualizar = new JButton("Actualizar");
+        btnActualizar.addActionListener(e -> cargarEquipos());
+        
+        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        panelBoton.add(btnActualizar);
+        add(panelBoton, BorderLayout.NORTH);
+    }
+    
+    private void configurarWebSocket() {
+        // Configuración del cliente WebSocket
+        // Se implementará en el siguiente paso
+        log("Configuración de WebSocket lista");
+    }
+    
+    private void cargarEquipos() {
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    log("Cargando lista de equipos...");
+                    
+                    HttpClient client = HttpClient.newHttpClient();
+                    HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(SERVER_URL + "/equipos"))
+                        .header("Accept", "application/json")
+                        .build();
+                    
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    
+                    if (response.statusCode() == 200) {
+                        JSONArray equipos = new JSONArray(response.body());
+                        actualizarListaEquipos(equipos);
+                    } else {
+                        log("Error al cargar equipos: " + response.statusCode());
+                    }
+                } catch (Exception e) {
+                    log("Error al cargar equipos: " + e.getMessage());
+                    e.printStackTrace();
+                }
+                return null;
+            }
+        };
+        
+        worker.execute();
+    }
+    
+    private void actualizarListaEquipos(JSONArray equipos) {
+        SwingUtilities.invokeLater(() -> {
+            modeloListaEquipos.clear();
+            equiposActivos.clear();
+            
+            for (int i = 0; i < equipos.length(); i++) {
+                JSONObject equipoJson = equipos.getJSONObject(i);
+                EquipoDTO equipo = new EquipoDTO(
+                    equipoJson.getLong("idEquipo"),
+                    equipoJson.optString("nombre", "Sin nombre"),
+                    equipoJson.optString("ip", ""),
+                    equipoJson.optBoolean("activo", false)
+                );
+                
+                equiposActivos.put(equipo.getId(), equipo);
+                modeloListaEquipos.addElement(equipo.getNombre() + " (ID: " + equipo.getId() + ")");
+            }
+            
+            if (!equiposActivos.isEmpty()) {
+                listaEquipos.setSelectedIndex(0);
+            }
+        });
+    }
+    
+    private void seleccionarEquipo(ListSelectionEvent e) {
+        if (e.getValueIsAdjusting()) return;
+        
+        int selectedIndex = listaEquipos.getSelectedIndex();
+        if (selectedIndex >= 0) {
+            String selected = modeloListaEquipos.getElementAt(selectedIndex);
+            // Extraer el ID del equipo del texto seleccionado
+            try {
+                int startIndex = selected.lastIndexOf("ID: ") + 4;
+                int endIndex = selected.indexOf(")", startIndex);
+                long equipoId = Long.parseLong(selected.substring(startIndex, endIndex));
+                cargarCamaras(equipoId);
+            } catch (Exception ex) {
+                log("Error al obtener ID del equipo: " + ex.getMessage());
+            }
+        }
+    }
+    
+    private void cargarCamaras(long equipoId) {
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                try {
+                    log("Cargando cámaras para el equipo ID: " + equipoId);
+                    
+                    HttpClient client = HttpClient.newHttpClient();
+                    HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(SERVER_URL + "/equipos/" + equipoId + "/camaras"))
+                        .header("Accept", "application/json")
+                        .build();
+                    
+                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    
+                    if (response.statusCode() == 200) {
+                        JSONArray camaras = new JSONArray(response.body());
+                        actualizarTablaCamaras(camaras);
+                    } else {
+                        log("Error al cargar cámaras: " + response.statusCode());
+                    }
+                } catch (Exception e) {
+                    log("Error al cargar cámaras: " + e.getMessage());
+                    e.printStackTrace();
+                }
+                return null;
+            }
+        };
+        
+        worker.execute();
+    }
+    
+    private void actualizarTablaCamaras(JSONArray camaras) {
+        SwingUtilities.invokeLater(() -> {
+            modeloTablaCamaras.setRowCount(0);
+            
+            for (int i = 0; i < camaras.length(); i++) {
+                JSONObject camara = camaras.getJSONObject(i);
+                modeloTablaCamaras.addRow(new Object[]{
+                    camara.getLong("idCamara"),
+                    camara.optString("nombre", "Sin nombre"),
+                    camara.optString("ip", ""),
+                    camara.optBoolean("activa", false) ? "Activa" : "Inactiva"
+                });
+            }
+            
+            log("Cargadas " + camaras.length() + " cámaras");
+        });
+    }
+    
+    private void log(String mensaje) {
+        SwingUtilities.invokeLater(() -> {
+            areaLogs.append("[" + java.time.LocalTime.now() + "] " + mensaje + "\n");
+            areaLogs.setCaretPosition(areaLogs.getDocument().getLength());
+        });
+    }
+    
+    // Clase DTO para equipos
+    private static class EquipoDTO {
+        private final long id;
+        private String nombre;
+        private String ip;
+        private boolean activo;
+        
+        public EquipoDTO(long id, String nombre, String ip, boolean activo) {
+            this.id = id;
+            this.nombre = nombre;
+            this.ip = ip;
+            this.activo = activo;
+        }
+        
+        public long getId() { return id; }
+        public String getNombre() { return nombre; }
+        public String getIp() { return ip; }
+        public boolean isActivo() { return activo; }
+        
+        public void setNombre(String nombre) { this.nombre = nombre; }
+        public void setIp(String ip) { this.ip = ip; }
+        public void setActivo(boolean activo) { this.activo = activo; }
+    }
+    
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            
+            ServidorUI servidorUI = new ServidorUI();
+            servidorUI.setVisible(true);
+        });
+    }
+}

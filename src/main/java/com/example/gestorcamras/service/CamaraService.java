@@ -19,4 +19,5 @@ public interface CamaraService {
     List<CamaraDTO> obtenerPorUbicacion(Long idUbicacion);
     List<CamaraDTO> obtenerPorActiva(boolean activa);
     List<CamaraDTO> obtenerPorTipo(String tipo);
+    List<CamaraDTO> obtenerPorEquipo(Long idEquipo);
 }

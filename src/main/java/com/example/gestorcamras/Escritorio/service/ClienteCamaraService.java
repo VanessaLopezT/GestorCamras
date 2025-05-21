@@ -111,14 +111,17 @@ public class ClienteCamaraService {
                         }
                     }
                     
-                    if (statusCode == 201) {  // 201 Created
+                    if (statusCode == 201 || statusCode == 200) {  // 201 Created o 200 OK
                         try {
                             JSONObject respuesta = new JSONObject(responseBody);
-                            if (respuesta.has("id")) {
-                                long idCamara = respuesta.getLong("id");
+                            String idKey = respuesta.has("idCamara") ? "idCamara" : "id";
+                            if (respuesta.has(idKey)) {
+                                long idCamara = respuesta.getLong(idKey);
                                 logger.accept("Cámara local registrada exitosamente con ID: " + idCamara);
                                 camaraIdConsumer.accept(idCamara);
                                 return;
+                            } else {
+                                logger.accept("La respuesta del servidor no contiene un ID de cámara válido: " + responseBody);
                             }
                         } catch (Exception e) {
                             logger.accept("Error al procesar la respuesta del servidor: " + e.getMessage());

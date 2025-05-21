@@ -24,7 +24,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
 import java.nio.charset.StandardCharsets;
-
+import com.example.gestorcamras.Escritorio.websocket.StompClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -36,6 +36,7 @@ public class ClienteSwingController {
     private Consumer<Boolean> connectionStatusConsumer;
     private final ClienteCamaraService camaraService;
     private final ClienteEquipoService equipoService;
+    private StompClient stompClient;
 
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
         this.cookieSesion = cookieSesion;
@@ -46,8 +47,66 @@ public class ClienteSwingController {
         
         // Configurar el logger para el servicio de equipos
         this.equipoService.setLogger(this::log);
+        
+        // Inicializar WebSocket
+        inicializarWebSocket();
     }
 
+    /**
+     * Inicializa la conexión WebSocket con el servidor usando STOMP
+     */
+    private void inicializarWebSocket() {
+        try {
+            stompClient = new StompClient(
+                servidorUrl,
+                cookieSesion,
+                this::log,
+                this::procesarMensajeWebSocket
+            );
+        } catch (Exception e) {
+            log("Error al inicializar STOMP WebSocket: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Procesa los mensajes recibidos a través de WebSocket
+     */
+    private void procesarMensajeWebSocket(JSONObject mensaje) {
+        if (mensaje == null) return;
+        
+        String tipo = mensaje.optString("tipo");
+        JSONObject datos = mensaje.optJSONObject("datos");
+        
+        if (tipo == null || datos == null) {
+            log("Mensaje WebSocket con formato inválido: " + mensaje);
+            return;
+        }
+        
+        switch (tipo) {
+            case "equipo_actualizado":
+                // Actualizar estado del equipo en la interfaz
+                log("Equipo actualizado: " + datos);
+                if (connectionStatusConsumer != null) {
+                    connectionStatusConsumer.accept(true);
+                }
+                break;
+                
+            case "nueva_camara":
+                // Notificar sobre nueva cámara detectada
+                log("Nueva cámara detectada: " + datos);
+                break;
+                
+            case "alarma":
+                // Manejar notificación de alarma
+                log("¡Alarma! " + datos.optString("mensaje", "Sin detalles"));
+                break;
+                
+            default:
+                log("Tipo de mensaje WebSocket no manejado: " + tipo);
+                break;
+        }
+    }
+    
     public void setLogConsumer(Consumer<String> logConsumer) {
         this.logConsumer = logConsumer;
     }
@@ -758,9 +817,17 @@ public class ClienteSwingController {
         return outputStream.toByteArray();
     }
 
-    public void dispose() {
+    public void detener() {
+        // Cerrar conexión STOMP WebSocket
+        if (stompClient != null) {
+            stompClient.cerrar();
+            stompClient = null;
+        }
+        
+        // Detener el temporizador de ping
         if (timerPing != null) {
             timerPing.cancel();
+            timerPing = null;
         }
     }
     

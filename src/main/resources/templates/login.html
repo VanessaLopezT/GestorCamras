@@ -7,11 +7,18 @@
 <body>
 <h2>Iniciar sesión</h2>
 <form th:action="@{/login}" method="post">
-    <label>Correo:</label>
-    <input type="text" name="username" required /><br>
-    <label>Contraseña:</label>
-    <input type="password" name="password" required /><br>
-    <button type="submit">Ingresar</button>
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+    <div>
+        <label>Correo:</label>
+        <input type="text" name="username" required />
+    </div>
+    <div>
+        <label>Contraseña:</label>
+        <input type="password" name="password" required />
+    </div>
+    <div>
+        <button type="submit">Ingresar</button>
+    </div>
 </form>
 <div th:if="${param.error != null}">
     <p style="color:#ff3232;">Credenciales inválidas</p>
