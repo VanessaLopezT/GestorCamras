@@ -13,11 +13,12 @@ public class RedisCacheService {
     @Autowired
     private StringRedisTemplate redisTemplate;
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    @Autowired
+    private ObjectMapper objectMapper;
 
     public void guardarEstadoEquipo(Long equipoId, EstadoEquipoDTO estado) {
         try {
-            String json = mapper.writeValueAsString(estado);
+            String json = objectMapper.writeValueAsString(estado);
             redisTemplate.opsForValue().set("estado:equipo:" + equipoId, json);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
@@ -28,7 +29,7 @@ public class RedisCacheService {
         String json = redisTemplate.opsForValue().get("estado:equipo:" + equipoId);
         if (json == null) return null;
         try {
-            return mapper.readValue(json, EstadoEquipoDTO.class);
+            return objectMapper.readValue(json, EstadoEquipoDTO.class);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
             return null;

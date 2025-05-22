@@ -103,9 +103,13 @@ public class LoginFrame extends JFrame {
     private void login() {
         String usuario = tfUsuario.getText().trim();
         String password = new String(pfClave.getPassword());
-        String servidorUrl = "http://localhost:8080";
+        
+        // Obtener la configuración del servidor desde las propiedades del sistema
+        String host = System.getProperty("gestorcamras.server.host", "localhost");
+        String port = System.getProperty("gestorcamras.server.port", "8080");
+        String servidorUrl = "http://" + host + ":" + port;
 
-        if (usuario.isEmpty() || password.isEmpty() || servidorUrl.isEmpty()) {
+        if (usuario.isEmpty() || password.isEmpty()) {
             lbEstado.setText("Por favor, complete todos los campos.");
             return;
         }

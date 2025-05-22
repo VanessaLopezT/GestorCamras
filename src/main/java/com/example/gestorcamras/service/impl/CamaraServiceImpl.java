@@ -38,6 +38,9 @@ public class CamaraServiceImpl implements CamaraService {
     @Autowired
     private UsuarioRepository usuarioRepository; // Solo si también manejas Propietario
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private static final String PREFIX_CACHE = "camara_";
 
     // Métodos de conversión entre entidad y DTO
@@ -101,7 +104,7 @@ public class CamaraServiceImpl implements CamaraService {
                 .collect(Collectors.toList());
     }
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+
 
     @Override
     public Optional<CamaraDTO> obtenerPorId(Long id) {
