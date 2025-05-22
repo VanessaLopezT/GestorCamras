@@ -3,18 +3,22 @@ package com.example.gestorcamras.service.impl;
 import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.repository.CamaraRepository;
-import com.example.gestorcamras.redis.IRedisCache;
 import com.example.gestorcamras.repository.EquipoRepository;
 import com.example.gestorcamras.repository.UbicacionRepository;
 import com.example.gestorcamras.repository.UsuarioRepository;
 import com.example.gestorcamras.service.CamaraService;
 import com.example.gestorcamras.dto.CamaraDTO;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class CamaraServiceImpl implements CamaraService {
@@ -23,7 +27,7 @@ public class CamaraServiceImpl implements CamaraService {
     private CamaraRepository camaraRepository;
 
     @Autowired
-    private IRedisCache<Camara> redisCache;
+    private RedisTemplate<String, String> redisTemplate;
 
     @Autowired
     private UbicacionRepository ubicacionRepository;
@@ -97,29 +101,82 @@ public class CamaraServiceImpl implements CamaraService {
                 .collect(Collectors.toList());
     }
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Override
     public Optional<CamaraDTO> obtenerPorId(Long id) {
-        Optional<Camara> cacheada = redisCache.obtener(PREFIX_CACHE + id);
-        if (cacheada.isPresent()) {
-            return cacheada.map(this::toDTO);
+        // Intentar obtener de la caché
+        String cacheKey = PREFIX_CACHE + id;
+        String cachedValue = redisTemplate.opsForValue().get(cacheKey);
+        
+        if (cachedValue != null) {
+            try {
+                return Optional.of(objectMapper.readValue(cachedValue, CamaraDTO.class));
+            } catch (JsonProcessingException e) {
+                System.err.println("Error al deserializar cámara desde caché: " + e.getMessage());
+            }
         }
+        
+        // Si no está en caché o hay error, obtener de la base de datos
         Optional<Camara> camaraBD = camaraRepository.findById(id);
-        camaraBD.ifPresent(cam -> redisCache.guardar(PREFIX_CACHE + id, cam));
-        return camaraBD.map(this::toDTO);
+        if (camaraBD.isPresent()) {
+            Camara camara = camaraBD.get();
+            // Inicializar relaciones necesarias
+            if (camara.getEquipo() != null) {
+                camara.getEquipo().getNombre();
+            }
+            CamaraDTO dto = toDTO(camara);
+            
+            // Guardar en caché
+            try {
+                String dtoJson = objectMapper.writeValueAsString(dto);
+                redisTemplate.opsForValue().set(
+                    cacheKey, 
+                    dtoJson,
+                    1, TimeUnit.HOURS // Expira después de 1 hora
+                );
+            } catch (JsonProcessingException e) {
+                System.err.println("Error al serializar cámara para caché: " + e.getMessage());
+            }
+            
+            return Optional.of(dto);
+        }
+        
+        return Optional.empty();
     }
 
     @Override
     public CamaraDTO guardarCamara(CamaraDTO camaraDTO) {
+        // Si es una actualización, limpiar la caché existente
+        if (camaraDTO.getIdCamara() != null) {
+            redisTemplate.delete(PREFIX_CACHE + camaraDTO.getIdCamara());
+        }
+        
         Camara camara = toEntity(camaraDTO);
         Camara guardada = camaraRepository.save(camara);
-        redisCache.guardar(PREFIX_CACHE + guardada.getIdCamara(), guardada);
-        return toDTO(guardada);
+        
+        // Convertir a DTO para la respuesta
+        CamaraDTO dto = toDTO(guardada);
+        
+        // Guardar en caché
+        try {
+            String dtoJson = objectMapper.writeValueAsString(dto);
+            redisTemplate.opsForValue().set(
+                PREFIX_CACHE + guardada.getIdCamara(), 
+                dtoJson,
+                1, TimeUnit.HOURS // Expira después de 1 hora
+            );
+        } catch (JsonProcessingException e) {
+            System.err.println("Error al serializar cámara para caché: " + e.getMessage());
+        }
+        
+        return dto;
     }
 
     @Override
     public void eliminarCamara(Long id) {
         camaraRepository.deleteById(id);
-        redisCache.eliminar(PREFIX_CACHE + id);
+        redisTemplate.delete(PREFIX_CACHE + id);
     }
 
     @Override
@@ -148,9 +205,40 @@ public class CamaraServiceImpl implements CamaraService {
     }
     
     @Override
+    @Transactional(readOnly = true)
     public List<CamaraDTO> obtenerPorEquipo(Long idEquipo) {
-        return camaraRepository.findByEquipoIdEquipo(idEquipo).stream()
-                .map(this::toDTO)
+        // Obtener las cámaras
+        List<Camara> camaras = camaraRepository.findByEquipoIdEquipo(idEquipo);
+        
+        // Convertir a DTOs dentro del contexto transaccional
+        List<CamaraDTO> dtos = camaras.stream()
+                .map(camara -> {
+                    // Inicializar las relaciones necesarias
+                    if (camara.getEquipo() != null) {
+                        camara.getEquipo().getNombre();
+                    }
+                    return toDTO(camara);
+                })
                 .collect(Collectors.toList());
+        
+        // Guardar en caché los DTOs
+        for (int i = 0; i < camaras.size(); i++) {
+            Camara camara = camaras.get(i);
+            CamaraDTO dto = dtos.get(i);
+            
+            try {
+                String dtoJson = objectMapper.writeValueAsString(dto);
+                // Guardar el JSON en Redis con tiempo de expiración
+                redisTemplate.opsForValue().set(
+                    PREFIX_CACHE + camara.getIdCamara(), 
+                    dtoJson,
+                    1, TimeUnit.HOURS // Expira después de 1 hora
+                );
+            } catch (Exception e) {
+                System.err.println("Error al serializar DTO para caché: " + e.getMessage());
+            }
+        }
+        
+        return dtos;
     }
 }

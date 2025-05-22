@@ -556,12 +556,19 @@ public class ServidorUI extends JFrame {
         // Agregar las cámaras a la tabla
         for (int i = 0; i < camaras.length(); i++) {
             JSONObject camara = camaras.getJSONObject(i);
+            
+            // Obtener el estado basado en el campo 'activa'
+            boolean activa = camara.optBoolean("activa", false);
+            String estado = activa ? "Activa" : "Inactiva";
+            
+            // Obtener la IP de la cámara
+            String ip = camara.optString("ip", "Desconocida");
+            
             modeloTablaCamaras.addRow(new Object[]{
                 camara.getLong("idCamara"),
                 camara.optString("nombre", "Sin nombre"),
-                camara.optString("ubicacion", "Desconocida"),
-                camara.optString("estado", "Desconocido"),
-                camara.optString("tipo", "Desconocido")
+                ip,
+                estado
             });
         }
         

@@ -35,7 +35,7 @@ public class Camara {
     @JoinColumn(name = "usuario_id")
     private Usuario propietario;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "equipo_id")
     private Equipo equipo;
 
