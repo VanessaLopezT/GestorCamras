@@ -353,7 +353,7 @@ public class ClienteSwingController {
                             if (statusCode == 200 || statusCode == 201) {
                                 try {
                                     JSONObject jsonResponse = new JSONObject(responseBody);
-                                    String nuevoEquipoId = jsonResponse.getString("id");
+                                    String nuevoEquipoId = String.valueOf(jsonResponse.getLong("idEquipo"));
                                     log("Equipo registrado exitosamente con ID: " + nuevoEquipoId);
                                     
                                     // Iniciar el ping para mantener la conexión activa
