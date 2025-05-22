@@ -72,7 +72,20 @@ public class SecurityConfig {
                     .ignoringRequestMatchers("/api/equipos", "/api/equipos/**")
                     .ignoringRequestMatchers("/login")
                     .ignoringRequestMatchers("/api/camaras", "/api/camaras/**")
+                    .ignoringRequestMatchers("/api/equipos/registrar")
+                    .ignoringRequestMatchers("/api/equipos/ip/**")
                 )
+                // Habilitar CORS para todos los orígenes
+                .cors(cors -> cors.configurationSource(request -> {
+                    var corsConfig = new org.springframework.web.cors.CorsConfiguration();
+                    corsConfig.setAllowedOrigins(java.util.List.of("*"));
+                    corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+                    corsConfig.setAllowedHeaders(java.util.List.of("*"));
+                    corsConfig.setExposedHeaders(java.util.List.of("Authorization", "Cache-Control", "Content-Type"));
+                    corsConfig.setAllowCredentials(true);
+                    corsConfig.setMaxAge(3600L);
+                    return corsConfig;
+                }))
                 // Configuración CORS
                 .cors(cors -> cors.configurationSource(request -> {
                     var corsConfig = new org.springframework.web.cors.CorsConfiguration();
