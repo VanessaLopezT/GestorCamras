@@ -73,7 +73,7 @@ public class GestorCamrasApplication {
                     String ipServidor = JOptionPane.showInputDialog(
                         null,
                         "Ingrese la dirección IP del servidor:",
-                        "192.168.1.9"
+                        "192.168."
                     );
                     
                     // Si el usuario cancela o cierra el diálogo, salir

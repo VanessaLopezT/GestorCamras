@@ -8,7 +8,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.event.ListSelectionEvent;
 import java.awt.*;
-
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.net.URI;
 import java.util.Map;
@@ -34,6 +37,7 @@ public class ServidorUI extends JFrame {
     private JTable tablaCamaras;
     private DefaultTableModel modeloTablaCamaras;
     private JTextArea areaLogs;
+    private JLabel lblEstadoServidor;
 
     public ServidorUI() {
         if (!isServerInstance) {
@@ -106,13 +110,27 @@ public class ServidorUI extends JFrame {
         
         add(panelPrincipal, BorderLayout.CENTER);
         
-        // Botón de actualizar
+        // Panel superior con información del servidor y botones
+        JPanel panelSuperior = new JPanel(new BorderLayout());
+        
+        // Panel de estado del servidor
+        JPanel panelEstado = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        lblEstadoServidor = new JLabel("Obteniendo dirección IP...");
+        panelEstado.add(new JLabel("Servidor: "));
+        panelEstado.add(lblEstadoServidor);
+        panelSuperior.add(panelEstado, BorderLayout.WEST);
+        
+        // Panel de botones
+        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton btnActualizar = new JButton("Actualizar");
         btnActualizar.addActionListener(e -> cargarEquipos());
-        
-        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         panelBoton.add(btnActualizar);
-        add(panelBoton, BorderLayout.NORTH);
+        panelSuperior.add(panelBoton, BorderLayout.EAST);
+        
+        add(panelSuperior, BorderLayout.NORTH);
+        
+        // Obtener y mostrar la IP del servidor
+        actualizarDireccionIP();
     }
     
     private void configurarWebSocket() {
@@ -315,14 +333,68 @@ public class ServidorUI extends JFrame {
     }
     
     private void log(String mensaje) {
-        if (areaLogs != null) {
-            SwingUtilities.invokeLater(() -> {
-                areaLogs.append("[" + java.time.LocalTime.now() + "] " + mensaje + "\n");
-                areaLogs.setCaretPosition(areaLogs.getDocument().getLength());
-            });
-        } else {
-            System.out.println("[" + java.time.LocalTime.now() + "] " + mensaje);
+        SwingUtilities.invokeLater(() -> {
+            areaLogs.append("[" + java.time.LocalTime.now() + "] " + mensaje + "\n");
+            areaLogs.setCaretPosition(areaLogs.getDocument().getLength());
+        });
+    }
+    
+    /**
+     * Actualiza la interfaz con la dirección IP del servidor
+     */
+    private void actualizarDireccionIP() {
+        new Thread(() -> {
+            try {
+                String ip = obtenerDireccionIP();
+                String mensaje = "Dirección IP: " + ip + " (Puerto: 8080)";
+                SwingUtilities.invokeLater(() -> {
+                    lblEstadoServidor.setText(mensaje);
+                    log("Servidor iniciado en: http://" + ip + ":8080");
+                });
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    lblEstadoServidor.setText("No se pudo determinar la dirección IP");
+                    log("Error al obtener la dirección IP: " + e.getMessage());
+                });
+            }
+        }).start();
+    }
+    
+    /**
+     * Obtiene la dirección IP local de la máquina
+     * @return La dirección IP local o "localhost" si no se pudo determinar
+     */
+    private String obtenerDireccionIP() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                // Ignorar interfaces que no estén activas o sean loopback
+                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || iface.isPointToPoint()) {
+                    continue;
+                }
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    // Solo direcciones IPv4
+                    if (addr.isLoopbackAddress() || !(addr.getHostAddress().contains("."))) {
+                        continue;
+                    }
+                    
+                    String hostAddress = addr.getHostAddress();
+                    // Verificar que sea una dirección IP privada
+                    if (hostAddress.startsWith("192.168.") || 
+                        hostAddress.startsWith("10.") || 
+                        hostAddress.startsWith("172.16.")) {
+                        return hostAddress;
+                    }
+                }
+            }
+        } catch (SocketException e) {
+            log("Error al obtener la dirección IP: " + e.getMessage());
         }
+        return "localhost";
     }
     
     private void procesarAlarma(JSONObject datos) {
