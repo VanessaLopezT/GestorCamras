@@ -75,12 +75,16 @@ public class GestorCamrasApplication {
                         "Ingrese la dirección IP del servidor:",
                         "192.168.1.9"
                     );
+                    
                     // Si el usuario cancela o cierra el diálogo, salir
                     if (ipServidor == null) {
                         System.exit(0);
                     }
-                    // Si el usuario no ingresa nada, usar la IP por defecto
+                    
+                    // Limpiar y validar la entrada
                     ipServidor = ipServidor.trim();
+                    
+                    // Si el usuario no ingresa nada o solo espacios, usar la IP por defecto
                     if (ipServidor.isEmpty()) {
                         ipServidor = "192.168.1.9";
                     }
