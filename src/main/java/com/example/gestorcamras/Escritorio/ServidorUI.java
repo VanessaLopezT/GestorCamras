@@ -15,6 +15,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.net.URI;
 import java.util.Map;
+import com.example.gestorcamras.Escritorio.EquipoEscritorioDTO;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +23,7 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 public class ServidorUI extends JFrame {
-    private final Map<Long, EquipoDTO> equiposActivos = new HashMap<>();
+    private final Map<Long, EquipoEscritorioDTO> equiposActivos = new HashMap<>();
     private WebSocketClient webSocketClient;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static final String WS_URL = "ws://localhost:8080/ws/websocket";
@@ -428,7 +429,7 @@ public class ServidorUI extends JFrame {
         String nombre = datos.optString("nombre", "Equipo " + idEquipo);
         String ip = datos.optString("ip", "");
         
-        EquipoDTO equipo = new EquipoDTO(idEquipo, nombre, ip, true);
+        EquipoEscritorioDTO equipo = new EquipoEscritorioDTO(idEquipo, nombre, ip, true);
         
         SwingUtilities.invokeLater(() -> {
             equiposActivos.put(idEquipo, equipo);
@@ -442,10 +443,10 @@ public class ServidorUI extends JFrame {
         boolean activo = datos.optBoolean("activo", true);
         
         SwingUtilities.invokeLater(() -> {
-            EquipoDTO equipoViejo = equiposActivos.get(idEquipo);
+            EquipoEscritorioDTO equipoViejo = equiposActivos.get(idEquipo);
             if (equipoViejo != null) {
                 // Crear una nueva instancia con el estado actualizado
-                EquipoDTO equipoActualizado = new EquipoDTO(
+                EquipoEscritorioDTO equipoActualizado = new EquipoEscritorioDTO(
                     equipoViejo.getId(),
                     equipoViejo.getNombre(),
                     equipoViejo.getIp(),
@@ -586,7 +587,7 @@ public class ServidorUI extends JFrame {
             
             for (int i = 0; i < equipos.length(); i++) {
                 JSONObject equipoJson = equipos.getJSONObject(i);
-                EquipoDTO equipo = new EquipoDTO(
+                EquipoEscritorioDTO equipo = new EquipoEscritorioDTO(
                     equipoJson.getLong("idEquipo"),
                     equipoJson.optString("nombre", "Sin nombre"),
                     equipoJson.optString("ip", ""),

@@ -49,14 +49,12 @@ public class ClienteSwingUI extends JFrame {
         // Configurar la interfaz de usuario
         initUI();
         
-        // Iniciar la verificación de conexión
-        verificarYConectar();
-    }
-    
-    private void verificarYConectar() {
         // Configurar el consumidor de estado de conexión
         controller.setConnectionStatusConsumer(conectado -> {
-            if (!conectado) {
+            if (conectado) {
+                // Una vez que la conexión está establecida, cargar las cámaras
+                SwingUtilities.invokeLater(this::cargarCamaras);
+            } else {
                 JOptionPane.showMessageDialog(this, 
                     "No se pudo conectar al servidor. Verifica que el servidor esté en ejecución y la URL sea correcta.",
                     "Error de conexión", 
@@ -65,6 +63,11 @@ public class ClienteSwingUI extends JFrame {
             }
         });
         
+        // Iniciar la verificación de conexión
+        verificarYConectar();
+    }
+    
+    private void verificarYConectar() {
         // Iniciar la verificación de conexión
         controller.verificarYConectar();
     }
@@ -135,8 +138,21 @@ public class ClienteSwingUI extends JFrame {
         panelBotones.add(btnEnviarImagen);
         panelBotones.add(btnSeleccionarVideo);
         panelBotones.add(btnEnviarVideo);
+        
+        // Botón para abrir la cámara
+        JButton btnAbrirCamara = new JButton("Abrir Cámara");
+        btnAbrirCamara.addActionListener(e -> abrirCamara());
+        
+        // Agregar el botón de cámara en una nueva fila
+        JPanel panelCamara = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        panelCamara.add(btnAbrirCamara);
+        
+        // Crear un panel para contener los botones y el panel de cámara
+        JPanel panelContenedor = new JPanel(new BorderLayout());
+        panelContenedor.add(panelBotones, BorderLayout.NORTH);
+        panelContenedor.add(panelCamara, BorderLayout.SOUTH);
 
-        panelCentro.add(panelBotones, BorderLayout.SOUTH);
+        panelCentro.add(panelContenedor, BorderLayout.SOUTH);
         panel.add(panelCentro, BorderLayout.CENTER);
 
         // Área de log
@@ -180,23 +196,19 @@ public class ClienteSwingUI extends JFrame {
         }
     }
     
-    private void cargarCamaras() {
-        // Si ya tenemos un ID de equipo generado, usarlo
-        if (equipoIdGenerado != null && !equipoIdGenerado.isEmpty()) {
-            cargarCamarasConEquipo(equipoIdGenerado);
-            return;
-        }
-        
-        // Si no hay ID generado, registramos un nuevo equipo
-        registrarNuevoEquipo();
-    }
+
     
     private void registrarNuevoEquipo() {
         controller.registrarEquipo(id -> {
             if (id != null) {
                 equipoIdGenerado = id;
                 log("Equipo registrado con ID: " + id);
-                cargarCamarasConEquipo(id);
+                // Al registrar un nuevo equipo, solo mostramos el ID sin cargar cámaras automáticamente
+                SwingUtilities.invokeLater(() -> {
+                    if (equipoIdLabel != null) {
+                        equipoIdLabel.setText("ID Equipo: " + id);
+                    }
+                });
             } else {
                 JOptionPane.showMessageDialog(this, 
                     "No se pudo registrar el equipo. Intente nuevamente.", 
@@ -208,6 +220,10 @@ public class ClienteSwingUI extends JFrame {
     
     private JLabel equipoIdLabel; // Add this as a class field
 
+    /**
+     * Carga las cámaras existentes para el equipo especificado sin crear nuevas cámaras automáticamente.
+     * @param equipoId ID del equipo del cual cargar las cámaras
+     */
     private void cargarCamarasConEquipo(String equipoId) {
         // Actualizar la etiqueta del ID del equipo si existe
         if (equipoIdLabel != null) {
@@ -217,6 +233,51 @@ public class ClienteSwingUI extends JFrame {
         // Limpiar el modelo de cámaras
         modeloCamaras.clear();
         
+        log("Cargando cámaras para el equipo: " + equipoId);
+        controller.cargarCamaras(equipoId, camaras -> {
+            // Actualizar la interfaz de usuario en el hilo de eventos de Swing
+            SwingUtilities.invokeLater(() -> {
+                if (camaras != null && camaras.length() > 0) {
+                    log("Se encontraron " + camaras.length() + " cámaras");
+                    modeloCamaras.clear(); // Limpiar antes de agregar
+                    for (int i = 0; i < camaras.length(); i++) {
+                        try {
+                            JSONObject camara = camaras.getJSONObject(i);
+                            String nombreCamara = camara.getString("nombre");
+                            modeloCamaras.addElement(nombreCamara);
+                            log("Cámara agregada: " + nombreCamara);
+                        } catch (Exception e) {
+                            log("Error al procesar la cámara: " + e.getMessage());
+                        }
+                    }
+                } else {
+                    log("No se encontraron cámaras. Use el botón 'Cargar cámaras' para agregar una nueva cámara.");
+                }
+            });
+        });
+    }
+    
+    /**
+     * Método que se llama al hacer clic en el botón 'Cargar cámaras'.
+     * Este método intenta registrar una nueva cámara local si no hay cámaras existentes.
+     */
+    private void cargarCamaras() {
+        // Si ya tenemos un ID de equipo generado, usarlo
+        if (equipoIdGenerado != null && !equipoIdGenerado.isEmpty()) {
+            cargarCamarasConBoton(equipoIdGenerado);
+            return;
+        }
+        
+        // Si no hay ID generado, registramos un nuevo equipo
+        registrarNuevoEquipo();
+    }
+    
+    /**
+     * Carga las cámaras y, si no hay ninguna, intenta registrar una nueva cámara local.
+     * Este método se llama solo cuando el usuario hace clic en el botón 'Cargar cámaras'.
+     * @param equipoId ID del equipo del cual cargar las cámaras
+     */
+    private void cargarCamarasConBoton(String equipoId) {
         // Variable para evitar múltiples registros de cámara
         final boolean[] registroEnCurso = {false};
         
@@ -336,5 +397,36 @@ public class ClienteSwingUI extends JFrame {
     public void dispose() {
         controller.detener();
         super.dispose();
+    }
+    
+    /**
+     * Abre la ventana de la cámara para tomar fotos o grabar videos.
+     */
+    private void abrirCamara() {
+        // Ejecutar en el hilo de eventos de Swing
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // Crear y mostrar la ventana de la cámara
+                CamaraFrame frameCamara = new CamaraFrame();
+                frameCamara.setLocationRelativeTo(this); // Centrar respecto a la ventana principal
+                frameCamara.setVisible(true);
+                
+                // Cuando se cierre la ventana de la cámara, liberar recursos
+                frameCamara.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                        log("Ventana de cámara cerrada");
+                    }
+                });
+                
+                log("Cámara abierta correctamente");
+            } catch (Exception e) {
+                log("Error al abrir la cámara: " + e.getMessage());
+                JOptionPane.showMessageDialog(this, 
+                    "No se pudo abrir la cámara. Asegúrate de que esté conectada y no esté siendo usada por otra aplicación.\nError: " + e.getMessage(),
+                    "Error de Cámara", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
     }
 }

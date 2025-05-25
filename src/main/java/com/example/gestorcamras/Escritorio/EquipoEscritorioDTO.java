@@ -3,21 +3,21 @@ package com.example.gestorcamras.Escritorio;
 /**
  * Clase DTO para representar un equipo en el sistema.
  */
-public class EquipoDTO {
+public class EquipoEscritorioDTO {
     private final long id;
     private final String nombre;
     private final String ip;
     private final boolean activo;
     
     /**
-     * Constructor de la clase EquipoDTO.
+     * Constructor de la clase EquipoEscritorioDTO.
      * 
      * @param id Identificador único del equipo
      * @param nombre Nombre descriptivo del equipo
      * @ip Dirección IP del equipo
      * @activo Estado de actividad del equipo
      */
-    public EquipoDTO(long id, String nombre, String ip, boolean activo) {
+    public EquipoEscritorioDTO(long id, String nombre, String ip, boolean activo) {
         this.id = id;
         this.nombre = nombre != null ? nombre : "Equipo " + id;
         this.ip = ip != null ? ip : "";
@@ -51,7 +51,7 @@ public class EquipoDTO {
     public boolean equals(Object obj) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-        EquipoDTO equipo = (EquipoDTO) obj;
+        EquipoEscritorioDTO equipo = (EquipoEscritorioDTO) obj;
         return id == equipo.id;
     }
     
