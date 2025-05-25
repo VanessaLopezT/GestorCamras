@@ -65,79 +65,54 @@ public class ArchivoMultimediaController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ArchivoMultimediaController.class);
 
     @PostMapping("/equipos/{idEquipo}/camaras/{idCamara}/archivo")
-    public ResponseEntity<Map<String, Object>> subirArchivo(
+    public ResponseEntity<?> subirArchivo(
             @PathVariable Long idEquipo,
             @PathVariable Long idCamara,
             @RequestParam("archivo") MultipartFile archivo,
             @RequestParam("tipo") String tipo) {
         
-        log.info("Recibida solicitud de subida de archivo - Equipo: {}, Cámara: {}, Tipo: {}", idEquipo, idCamara, tipo);
-        log.info("Archivo recibido: {} ({} bytes)", archivo.getOriginalFilename(), archivo.getSize());
-        
         try {
-            log.debug("Validando tipo de archivo...");
             // Validar tipo de archivo
-            log.debug("Validando tipo de archivo: {}", tipo);
             if (!tipo.equalsIgnoreCase("FOTO") && !tipo.equalsIgnoreCase("VIDEO")) {
-                String errorMsg = "Tipo de archivo no válido. Debe ser FOTO o VIDEO";
-                log.warn(errorMsg);
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", errorMsg));
+                    .body(Map.of("error", "Tipo de archivo no válido. Debe ser FOTO o VIDEO"));
             }
 
-            // Verificar que el archivo no esté vacío
-            log.debug("Verificando si el archivo está vacío...");
+            // Validar que el archivo no esté vacío
             if (archivo.isEmpty()) {
-                String errorMsg = "El archivo no puede estar vacío";
-                log.warn(errorMsg);
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", errorMsg));
+                    .body(Map.of("error", "No se puede subir un archivo vacío"));
             }
 
             // Verificar que el equipo y la cámara existen
-            log.debug("Buscando equipo con ID: {}", idEquipo);
             Equipo equipo = equipoRepository.findById(idEquipo)
-                    .orElseThrow(() -> {
-                        String errorMsg = "Equipo no encontrado con ID: " + idEquipo;
-                        log.error(errorMsg);
-                        return new RuntimeException(errorMsg);
-                    });
+                    .orElseThrow(() -> new RuntimeException("Equipo no encontrado con ID: " + idEquipo));
             
-            log.debug("Buscando cámara con ID: {}", idCamara);
             Camara camara = camaraRepository.findById(idCamara)
-                    .orElseThrow(() -> {
-                        String errorMsg = "Cámara no encontrada con ID: " + idCamara;
-                        log.error(errorMsg);
-                        return new RuntimeException(errorMsg);
-                    });
+                    .orElseThrow(() -> new RuntimeException("Cámara no encontrada con ID: " + idCamara));
 
             // Verificar que la cámara pertenece al equipo (comprobar ambas relaciones)
-            log.debug("Verificando si la cámara {} pertenece al equipo {}", camara.getIdCamara(), equipo.getIdEquipo());
             boolean relacionDirecta = equipo.getCamaras().contains(camara);
             boolean relacionInversa = camara.getEquipo() != null && camara.getEquipo().getIdEquipo().equals(equipo.getIdEquipo());
             
             if (!relacionDirecta && !relacionInversa) {
-                String errorMsg = String.format("La cámara %s no está asociada al equipo %s. " +
-                    "Verifique las relaciones en la base de datos.", camara.getIdCamara(), equipo.getIdEquipo());
-                log.warn(errorMsg);
+                String errorMsg = String.format("La cámara %s no está asociada al equipo %s", 
+                    camara.getIdCamara(), equipo.getIdEquipo());
                 
                 // Intentar corregir la relación si es necesario
                 try {
-                    log.info("Intentando corregir la relación entre cámara {} y equipo {}", camara.getIdCamara(), equipo.getIdEquipo());
                     camara.setEquipo(equipo);
                     camaraRepository.save(camara);
                     equipo.getCamaras().add(camara);
                     equipoRepository.save(equipo);
-                    log.info("Relación corregida exitosamente");
+                    log.info("Relación corregida: Cámara {} asociada al equipo {}", 
+                        camara.getIdCamara(), equipo.getIdEquipo());
                 } catch (Exception e) {
-                    log.error("Error al intentar corregir la relación: {}", e.getMessage());
                     return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(Map.of("error", errorMsg + " No se pudo corregir automáticamente."));
+                        .body(Map.of("error", errorMsg));
                 }
             } else if (relacionDirecta != relacionInversa) {
-                // Hay una inconsistencia en las relaciones, corregirla
-                log.warn("Inconsistencia detectada en las relaciones entre cámara {} y equipo {}", 
-                    camara.getIdCamara(), equipo.getIdEquipo());
+                // Corregir inconsistencia en las relaciones
                 try {
                     if (relacionDirecta && !relacionInversa) {
                         camara.setEquipo(equipo);
@@ -146,9 +121,8 @@ public class ArchivoMultimediaController {
                     }
                     camaraRepository.save(camara);
                     equipoRepository.save(equipo);
-                    log.info("Inconsistencia en relaciones corregida");
                 } catch (Exception e) {
-                    log.error("Error al corregir inconsistencia en relaciones: {}", e.getMessage());
+                    // Continuar aunque falle la corrección
                 }
             }
 

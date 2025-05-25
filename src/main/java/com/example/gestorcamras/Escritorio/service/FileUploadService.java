@@ -182,11 +182,7 @@ public class FileUploadService {
             log("Tamaño del archivo: " + fileBytes.length + " bytes");
             log("Tipo MIME: " + mimeType);
             
-            // Mostrar solo los primeros 200 bytes del contenido para depuración
-            int previewLength = Math.min(200, result.length);
-            String preview = new String(result, 0, previewLength, StandardCharsets.UTF_8);
-            log("Vista previa de la petición (primeros " + previewLength + " bytes):");
-            log(preview);
+            // No mostrar vista previa del contenido binario
             
             return result;
         } catch (Exception e) {

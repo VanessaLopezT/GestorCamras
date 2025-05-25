@@ -62,13 +62,20 @@ public class SecurityConfig {
             "/api/equipos/registrar",
             "/api/equipos/ip/**",
             "/api/equipos/*/camaras",
-            "/api/camaras/equipo/*",
-            "/api/equipos/*/camaras/*/archivo"
+            "/api/camaras/equipo/*"
         };
 
         return http
                 // Deshabilitar CSRF para endpoints específicos
-                .csrf(csrf -> csrf.disable()) // Deshabilitar CSRF completamente                // Habilitar CORS para todos los orígenes
+                .csrf(csrf -> csrf
+                    .ignoringRequestMatchers("/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", "/app/**", "/user/queue/**", "/sockjs/**")
+                    .ignoringRequestMatchers("/api/equipos", "/api/equipos/**")
+                    .ignoringRequestMatchers("/login")
+                    .ignoringRequestMatchers("/api/camaras", "/api/camaras/**")
+                    .ignoringRequestMatchers("/api/equipos/registrar")
+                    .ignoringRequestMatchers("/api/equipos/ip/**")
+                )
+                // Habilitar CORS para todos los orígenes
                 .cors(cors -> cors.configurationSource(request -> {
                     var corsConfig = new org.springframework.web.cors.CorsConfiguration();
                     corsConfig.setAllowedOrigins(java.util.List.of("*"));
@@ -92,17 +99,12 @@ public class SecurityConfig {
                 }))
                 // Configuración de autorización
                 .authorizeHttpRequests(auth -> auth
-                    // Permitir todos los endpoints de la API
-                    .requestMatchers(
-                        "/api/**",
-                        "/ws/**",
-                        "/topic/**",
-                        "/app/**",
-                        "/user/**",
-                        "/queue/**"
-                    ).permitAll()
+                    // Endpoints públicos
+                    .requestMatchers(publicPaths).permitAll()
                     // Endpoints de administración
                     .requestMatchers("/ADMINISTRADOR/**").hasRole("ADMINISTRADOR")
+                    // API REST (requiere autenticación de operador)
+                    .requestMatchers("/api/**").hasAnyRole("OPERADOR", "ADMINISTRADOR")
                     // Cualquier otra solicitud requiere autenticación
                     .anyRequest().authenticated()
                 )

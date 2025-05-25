@@ -2,42 +2,282 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <title th:text="${usuario.idUsuario == null} ? 'Crear Usuario' : 'Editar Usuario'">Usuario</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            --primary-dark: #0a192f;
+            --primary-medium: #172a45;
+            --primary-light: #303f60;
+            --accent-blue: #64ffda;
+            --accent-red: #ff5555;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --success-color: #4CAF50;
+            --error-color: #f44336;
+            --border-color: rgba(100, 255, 218, 0.1);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        body {
+            background-color: var(--primary-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-medium) 100%);
+            padding: 2rem;
+        }
+        
+        .form-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: var(--primary-medium);
+            border-radius: 4px;
+            padding: 2rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+        }
+        
+        .form-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .form-header h2 {
+            font-weight: 400;
+            font-size: 1.5rem;
+            color: var(--accent-blue);
+            display: flex;
+            align-items: center;
+        }
+        
+        .form-header svg {
+            margin-right: 10px;
+            width: 24px;
+            height: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 400;
+        }
+        
+        input {
+            width: 100%;
+            padding: 0.9rem 1.2rem;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        select {
+            width: 100%;
+            padding: 0.9rem 1.2rem;
+            background-color: var(--primary-light);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364ffda' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+        }
+        
+        select option {
+            background-color: var(--primary-medium);
+            color: var(--text-primary);
+            padding: 0.5rem;
+        }
+        
+        input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            background-color: rgba(100, 255, 218, 0.05);
+            box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.1);
+        }
+        
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(90deg, var(--accent-blue) 0%, rgba(100, 255, 218, 0.7) 100%);
+            color: var(--primary-dark);
+            font-weight: 500;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(90deg, var(--accent-blue) 0%, var(--accent-blue) 100%);
+            box-shadow: 0 4px 12px rgba(100, 255, 218, 0.2);
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background-color: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--text-secondary);
+        }
+        
+        .btn-secondary:hover {
+            color: var(--text-primary);
+            border-color: var(--text-primary);
+        }
+        
+        .btn svg {
+            margin-right: 8px;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 300;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1.5rem;
+        }
+        
+        .version {
+            display: inline-block;
+            background-color: rgba(100, 255, 218, 0.1);
+            color: var(--accent-blue);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            margin-top: 0.5rem;
+            font-weight: 400;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 1.5rem;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .btn {
+                justify-content: center;
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
-
-<h2 th:text="${usuario.idUsuario == null} ? 'Crear Usuario' : 'Editar Usuario'"></h2>
-
-<form th:action="@{/ADMINISTRADOR/usuarios/guardar}" th:object="${usuario}" method="post">
-
-    <!-- CAMPO OCULTO PARA idUsuario (SOLO SI ESTÁ EN EDICIÓN) -->
-    <input type="hidden" th:if="${usuario.idUsuario != null}" th:field="*{idUsuario}"/>
-
-    <label>Nombre:</label>
-    <input type="text" th:field="*{nombre}" required/><br>
-
-    <label>Correo:</label>
-    <input type="email" th:field="*{correo}" required/><br>
-
-    <label>Contraseña:</label>
-
-    <!-- CREACIÓN: contraseña obligatoria -->
-    <input type="password" th:field="*{contrasena}" th:if="${usuario.idUsuario == null}" required/><br>
-
-    <!-- EDICIÓN: contraseña opcional -->
-    <input type="password" th:field="*{contrasena}" th:if="${usuario.idUsuario != null}"
-           placeholder="Dejar vacío para mantener la contraseña actual"/><br>
-
-    <label>Rol:</label>
-    <select th:field="*{rol.idRol}">
-        <option th:value="1">ADMINISTRADOR</option>
-        <option th:value="2">OPERADOR</option>
-        <option th:value="3">VISUALIZADOR</option>
-    </select><br>
-
-    <button type="submit">Guardar</button>
-</form>
-
-<a th:href="@{/ADMINISTRADOR/usuarios}">Cancelar</a>
-
+    <div class="form-container">
+        <div class="form-header">
+            <h2>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span th:text="${usuario.idUsuario == null} ? 'Crear Nuevo Usuario' : 'Editar Usuario'"></span>
+            </h2>
+        </div>
+        
+        <form th:action="@{/ADMINISTRADOR/usuarios/guardar}" th:object="${usuario}" method="post">
+            <!-- CAMPO OCULTO PARA idUsuario (SOLO SI ESTÁ EN EDICIÓN) -->
+            <input type="hidden" th:if="${usuario.idUsuario != null}" th:field="*{idUsuario}"/>
+            
+            <div class="form-group">
+                <label for="nombre">Nombre Completo</label>
+                <input type="text" id="nombre" th:field="*{nombre}" required placeholder="Ingrese el nombre completo"/>
+            </div>
+            
+            <div class="form-group">
+                <label for="correo">Correo Electrónico</label>
+                <input type="email" id="correo" th:field="*{correo}" required placeholder="usuario@dominio.com"/>
+            </div>
+            
+            <div class="form-group">
+                <label for="contrasena">Contraseña</label>
+                <!-- CREACIÓN: contraseña obligatoria -->
+                <input type="password" id="contrasena" th:field="*{contrasena}" 
+                       th:if="${usuario.idUsuario == null}" required 
+                       placeholder="Ingrese una contraseña segura"/>
+                
+                <!-- EDICIÓN: contraseña opcional -->
+                <input type="password" id="contrasena" th:field="*{contrasena}"
+                       th:if="${usuario.idUsuario != null}"
+                       placeholder="Dejar vacío para mantener la contraseña actual"/>
+            </div>
+            
+            <div class="form-group">
+                <label for="rol">Rol del Usuario</label>
+                <select id="rol" th:field="*{rol.idRol}">
+                    <option th:value="1">ADMINISTRADOR</option>
+                    <option th:value="2">OPERADOR</option>
+                    <option th:value="3">VISUALIZADOR</option>
+                </select>
+            </div>
+            
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    Guardar Usuario
+                </button>
+                
+                <a th:href="@{/ADMINISTRADOR/usuarios}" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12"></line>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
 </body>
 </html>
