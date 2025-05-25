@@ -7,6 +7,8 @@ import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
+import java.io.IOException;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.time.LocalDateTime;
 
 import javax.swing.JButton;
@@ -339,11 +341,47 @@ public class ClienteSwingUI extends JFrame {
     }
     
     private void seleccionarArchivo(String tipo) {
+        // Determinar la carpeta base según el tipo de archivo
+        String carpetaBase = "capturas/";
+        String subcarpeta = "";
+        
+        if (tipo.toLowerCase().contains("foto") || tipo.toLowerCase().contains("imagen")) {
+            subcarpeta = "fotos";
+        } else if (tipo.toLowerCase().contains("video")) {
+            subcarpeta = "videos";
+        }
+        
+        // Crear la ruta completa a la carpeta
+        String rutaCarpeta = carpetaBase + subcarpeta;
+        File carpeta = new File(rutaCarpeta);
+        
+        // Si la carpeta no existe, intentar crearla
+        if (!carpeta.exists()) {
+            boolean creada = carpeta.mkdirs();
+            if (!creada) {
+                log("No se pudo crear la carpeta: " + rutaCarpeta);
+                // Usar el directorio de usuario como respaldo
+                carpeta = new File(System.getProperty("user.home"));
+            }
+        }
+        
+        // Configurar el selector de archivos
         JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(carpeta);
+        
+        // Configurar filtros según el tipo de archivo
+        if (tipo.toLowerCase().contains("foto") || tipo.toLowerCase().contains("imagen")) {
+            chooser.setFileFilter(new FileNameExtensionFilter("Imágenes", "jpg", "jpeg", "png", "gif"));
+        } else if (tipo.toLowerCase().contains("video")) {
+            chooser.setFileFilter(new FileNameExtensionFilter("Videos", "mp4", "avi", "mov", "wmv"));
+        }
+        
         int resultado = chooser.showOpenDialog(this);
         if (resultado == JFileChooser.APPROVE_OPTION) {
             archivoSeleccionado = chooser.getSelectedFile();
             log("Archivo seleccionado para " + tipo + ": " + archivoSeleccionado.getAbsolutePath());
+        } else {
+            log("Selección de archivo cancelada");
         }
     }
     
