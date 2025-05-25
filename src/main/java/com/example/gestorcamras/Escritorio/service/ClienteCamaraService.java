@@ -66,7 +66,7 @@ public class ClienteCamaraService {
                                          String csrfToken) {
         try {
             logger.accept("Registrando cámara local...");
-            String nombreCamara = "Cámara Local " + System.currentTimeMillis();
+            String nombreCamara = ("Cámara_Local_" + System.currentTimeMillis()).replace(" ", "_");
             
             // Crear el objeto JSON para la cámara
             JSONObject camaraJson = new JSONObject();
@@ -148,5 +148,48 @@ public class ClienteCamaraService {
     
     public String obtenerDispositivoVideo() {
         return "0"; // ID del primer dispositivo de video
+    }
+    
+    /**
+     * Obtiene la lista de cámaras de un equipo específico
+     * @param equipoId ID del equipo del que se quieren obtener las cámaras
+     * @param onSuccess Callback que se llama con la lista de cámaras en formato JSON
+     * @param onError Callback que se llama si ocurre un error
+     */
+    public void obtenerCamaras(String equipoId, Consumer<String> onSuccess, Consumer<String> onError) {
+        try {
+            if (equipoId == null || equipoId.trim().isEmpty()) {
+                onError.accept("El ID del equipo no puede estar vacío");
+                return;
+            }
+            
+            HttpClient client = HttpClient.newHttpClient();
+            String url = servidorUrl + "/api/camaras/equipo/" + equipoId;
+            
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Cookie", cookieSesion)
+                    .header("Accept", "application/json")
+                    .GET()
+                    .build();
+                    
+            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    int statusCode = response.statusCode();
+                    String responseBody = response.body();
+                    
+                    if (statusCode == 200) {
+                        onSuccess.accept(responseBody);
+                    } else {
+                        onError.accept("Error al obtener cámaras. Código: " + statusCode + ", Respuesta: " + responseBody);
+                    }
+                })
+                .exceptionally(e -> {
+                    onError.accept("Error en la solicitud de cámaras: " + e.getMessage());
+                    return null;
+                });
+        } catch (Exception e) {
+            onError.accept("Error inesperado al obtener cámaras: " + e.getMessage());
+        }
     }
 }

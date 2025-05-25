@@ -5,6 +5,9 @@ import org.java_websocket.handshake.ServerHandshake;
 import org.json.JSONObject;
 
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -13,96 +16,272 @@ import java.util.function.Consumer;
  */
 public class StompClient {
     private WebSocketClient webSocketClient;
-    private final String serverUrl;
+    private String serverUrl;
     private final String cookieSesion;
+    private final String clientId;
     private final Consumer<String> logger;
     private final Consumer<JSONObject> mensajeHandler;
     private boolean reconectando = false;
+    private int reintentosReconexion = 0;
     private String sessionId;
-    private String clientId;
     
-    // Constantes para el protocolo STOMP sobre SockJS
-    private static final String STOMP_CONNECT_TEMPLATE = "[\"CONNECT\\naccept-version:1.1,1.0\\nheart-beat:10000,10000\\n\\n\\u0000\"]";
-    private static final String STOMP_SUBSCRIBE_TEMPLATE = "[\"SUBSCRIBE\\nid:%s\\ndestination:%s\\n\\n\\u0000\"]";
-    private static final String STOMP_DISCONNECT_TEMPLATE = "[\"DISCONNECT\\n\\n\\u0000\"]";
+    // Constantes para mensajes SockJS
+    private static final String SOCKJS_OPEN = "o";
+    private static final String SOCKJS_HEARTBEAT = "h";
+    private static final String SOCKJS_CLOSE = "c";
+    private static final String SOCKJS_MESSAGE = "m";
+    private static final String SOCKJS_ARRAY = "a";
+    
+    // Constantes para mensajes STOMP
+    private static final String STOMP_CONNECT = "CONNECT\naccept-version:1.1,1.0\nheart-beat:10000,10000\n\n\u0000";
+    private static final String STOMP_SUBSCRIBE = "SUBSCRIBE\nid:sub-%s\ndestination:%s\n\n\u0000";
+    private static final String STOMP_UNSUBSCRIBE = "UNSUBSCRIBE\nid:sub-%s\n\n\u0000";
+    private static final String STOMP_DISCONNECT = "DISCONNECT\n\n\u0000";
+    private static final String SOCKJS_INFO = "GET /info HTTP/1.1\n\n";
+    
+    /**
+     * Envía un mensaje STOMP a través de la conexión WebSocket
+     * @param mensaje El mensaje STOMP a enviar (sin el carácter de terminación nulo)
+     */
+    private void enviarMensajeSTOMP(String mensaje) {
+        if (webSocketClient == null || !webSocketClient.isOpen()) {
+            logger.accept("No se puede enviar mensaje: WebSocket no conectado");
+            // Intentar reconectar si no estamos en medio de una reconexión
+            if (!reconectando) {
+                reconectar();
+            }
+            return;
+        }
+        
+        try {
+            // Asegurarse de que el mensaje termine con el carácter nulo
+            String mensajeCompleto = mensaje.endsWith("\u0000") ? mensaje : mensaje + "\u0000";
+            
+            // Para mensajes STOMP, no usamos el formato SockJS
+            if (mensaje.startsWith("CONNECT") || mensaje.startsWith("SUBSCRIBE") || 
+                mensaje.startsWith("UNSUBSCRIBE") || mensaje.startsWith("SEND")) {
+                logger.accept("Enviando mensaje STOMP directo: " + 
+                    mensajeCompleto.trim().replace("\n", "\\n"));
+                webSocketClient.send(mensajeCompleto);
+                return;
+            }
+            
+            // Para otros mensajes, usar formato SockJS
+            StringBuilder sb = new StringBuilder();
+            sb.append('a').append('[').append('"');
+            
+            // Escapar caracteres especiales
+            for (int i = 0; i < mensajeCompleto.length(); i++) {
+                char c = mensajeCompleto.charAt(i);
+                switch (c) {
+                    case '\\':
+                        sb.append("\\\\");
+                        break;
+                    case '"':
+                        sb.append("\\\\\"");
+                        break;
+                    case '\n':
+                        sb.append("\\\\n");
+                        break;
+                    case '\u0000':
+                        sb.append("\\\\u0000");
+                        break;
+                    default:
+                        // Solo caracteres ASCII imprimibles
+                        if (c >= 32 && c <= 126) {
+                            sb.append(c);
+                        } else {
+                            // Escapar otros caracteres no ASCII
+                            sb.append(String.format("\\\\u%04x", (int) c));
+                        }
+                }
+            }
+            
+            sb.append('"').append(']');
+            String mensajeFormateado = sb.toString();
+            
+            logger.accept("Enviando mensaje STOMP (formato SockJS): " + 
+                mensajeFormateado.substring(0, Math.min(100, mensajeFormateado.length())) + 
+                (mensajeFormateado.length() > 100 ? "..." : ""));
+                
+            webSocketClient.send(mensajeFormateado);
+            
+        } catch (Exception e) {
+            logger.accept("Error al enviar mensaje STOMP: " + e.getMessage());
+            e.printStackTrace();
+            
+            // Si hay un error al enviar, intentar reconectar
+            if (!reconectando) {
+                reconectar();
+            }
+        }
+    }
+    
+    // Constantes para el protocolo SockJS y STOMP
 
     public StompClient(String serverUrl, String cookieSesion, 
                       Consumer<String> logger, Consumer<JSONObject> mensajeHandler) {
-        // Asegurarse de que la URL termine con /ws/websocket para SockJS
-        String baseUrl = serverUrl.replace("http", "ws");
-        if (!baseUrl.endsWith("/")) {
-            baseUrl += "/";
-        }
-        this.serverUrl = baseUrl + "ws/websocket";
+        // Construir la URL del WebSocket
         this.cookieSesion = cookieSesion;
-        this.logger = logger != null ? logger : msg -> {};
-        this.mensajeHandler = mensajeHandler != null ? mensajeHandler : msg -> {};
-        this.clientId = UUID.randomUUID().toString().substring(0, 8);
-        
-        conectar();
+        this.logger = logger != null ? logger : System.out::println;
+        this.mensajeHandler = mensajeHandler != null ? mensajeHandler : json -> {};
+        this.clientId = "client-" + UUID.randomUUID().toString().substring(0, 8);
+
+        if (this.logger != null) {
+            this.logger.accept("Configurando WebSocket en: " + this.serverUrl);
+        }
+        conectarWebSocket();
     }
 
     /**
      * Establece la conexión WebSocket con el servidor
      */
-    public void conectar() {
+    private void suscribirCanales() {
+        // Suscribirse a los canales necesarios
+        suscribir("/topic/equipos");
+        suscribir("/topic/camaras");
+        suscribir("/topic/alarmas");
+    }
+
+    private void suscribir(String destino) {
+        if (webSocketClient != null && webSocketClient.isOpen()) {
+            String idSuscripcion = "sub-" + clientId + "-" + destino.hashCode();
+            String subscribeMsg = String.format(STOMP_SUBSCRIBE, idSuscripcion, destino);
+            enviarMensajeSTOMP(subscribeMsg);
+            logger.accept("Suscrito a " + destino + " con ID: " + idSuscripcion);
+        } else {
+            logger.accept("No se puede suscribir a " + destino + ": WebSocket no está conectado");
+        }
+    }
+
+    private void reconectar() {
+        if (reconectando) {
+            logger.accept("Ya hay una reconexión en curso");
+            return;
+        }
+
+        reconectando = true;
+
+        // Cerrar la conexión actual si existe
+        if (webSocketClient != null) {
+            try {
+                logger.accept("Cerrando conexión WebSocket actual...");
+                webSocketClient.close();
+            } catch (Exception e) {
+                logger.accept("Error al cerrar la conexión WebSocket: " + e.getMessage());
+            } finally {
+                webSocketClient = null;
+            }
+        }
+
+        // Esperar antes de intentar reconectar
+        int delay = Math.min(reintentosReconexion * 1000, 30000); // Hasta 30 segundos
+        logger.accept(String.format("Intentando reconectar en %d segundos...", delay / 1000));
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(delay);
+
+                // Incrementar el contador de reintentos (con un máximo razonable)
+                reintentosReconexion = Math.min(reintentosReconexion + 1, 10);
+
+                logger.accept("Iniciando reconexión (intento " + reintentosReconexion + ")");
+
+                // Intentar reconectar
+                conectarWebSocket();
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.accept("Hilo de reconexión interrumpido");
+            } catch (Exception e) {
+                logger.accept("Error en el hilo de reconexión: " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                reconectando = false;
+            }
+        }, "Reconexion-WebSocket").start();
+    }
+
+    private void conectarWebSocket() {
         try {
             logger.accept("Conectando a WebSocket en " + serverUrl);
-            
+
             webSocketClient = new WebSocketClient(new URI(serverUrl)) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     logger.accept("Conexión WebSocket establecida con " + serverUrl);
-                    // Enviar comando CONNECT de STOMP sobre SockJS
-                    send(STOMP_CONNECT_TEMPLATE);
+                    // No enviar nada aquí, esperar el mensaje 'o' del servidor
                 }
 
                 @Override
                 public void onMessage(String message) {
                     try {
-                        logger.accept("Mensaje recibido: " + message);
-                        
-                        // Procesar mensaje de bienvenida de SockJS
-                        if (message.startsWith("o{\"")) {
-                            logger.accept("Conexión SockJS establecida");
-                            // Enviar mensaje de conexión STOMP
-                            send(STOMP_CONNECT_TEMPLATE);
+                        if (message == null || message.trim().isEmpty()) {
+                            logger.accept("Mensaje de texto vacío recibido");
+                            return;
                         }
-                        // Procesar mensajes de texto de SockJS (empiezan con 'a')
-                        else if (message.startsWith("a[\"")) {
-                            // Extraer el contenido del mensaje (eliminar 'a[' al inicio y ']' al final)
-                            String content = message.substring(2, message.length() - 1);
-                            
-                            // Procesar mensajes STOMP
-                            if (content.startsWith("\"CONNECTED")) {
-                                logger.accept("Conexión STOMP establecida");
-                                // Suscribirse a los temas necesarios
-                                suscribir("/topic/equipos");
-                                suscribir("/topic/camaras");
-                                suscribir("/topic/alarmas");
-                            } 
-                            // Procesar mensajes de datos
-                            else if (content.startsWith("\"MESSAGE")) {
-                                procesarMensajeSTOMP(content);
-                            }
-                        }
-                        // Procesar mensajes de latido (h)
-                        else if (message.equals("h") || message.equals("h\n")) {
-                            // Responder al latido del servidor
-                            send("h\n");
+
+                        logger.accept("Mensaje de texto recibido: " + message);
+
+                        // Procesar mensajes SockJS
+                        if (message.equals("o") || message.startsWith("a[")) {
+                            procesarMensajeSockJS(message);
+                        } else if (message.startsWith("{") || message.startsWith("[")) {
+                            // Posible mensaje JSON directo
+                            procesarMensajeSTOMP(message);
+                        } else {
+                            logger.accept("Mensaje de texto no reconocido: " + message);
                         }
                     } catch (Exception e) {
-                        logger.accept("Error al procesar mensaje: " + e.getMessage());
+                        logger.accept("Error procesando mensaje de texto: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onMessage(ByteBuffer bytes) {
+                    try {
+                        if (bytes == null || bytes.remaining() == 0) {
+                            logger.accept("Mensaje binario vacío recibido");
+                            return;
+                        }
+
+                        // Verificar si es un mensaje de control SockJS (primer byte)
+                        if (bytes.remaining() == 1) {
+                            byte controlByte = bytes.get();
+                            if (controlByte == 'o' || controlByte == 'h' || controlByte == 'c') {
+                                String msg = String.valueOf((char)controlByte);
+                                if (controlByte == 'c') {
+                                    // Mensaje de cierre SockJS
+                                    msg += new String(bytes.array(), bytes.position(), bytes.remaining(), StandardCharsets.UTF_8);
+                                }
+                                procesarMensajeSockJS(msg);
+                                return;
+                            }
+                        }
+
+                        // Intentar decodificar como texto
+                        bytes.mark();
+                        try {
+                            String message = StandardCharsets.UTF_8.decode(bytes).toString();
+                            logger.accept("Mensaje binario convertido a texto: " + message);
+                            procesarMensajeSockJS(message);
+                        } catch (Exception e) {
+                            // Si falla, tratar como binario puro
+                            bytes.reset();
+                            logger.accept("Mensaje binario recibido (" + bytes.remaining() + " bytes)");
+                            // Aquí podrías manejar mensajes binarios puros si es necesario
+                        }
+                    } catch (Exception e) {
+                        logger.accept("Error procesando mensaje binario: " + e.getMessage());
+                        e.printStackTrace();
                     }
                 }
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    String mensaje = "Conexión WebSocket cerrada. Código: " + code + 
-                                    ", Razón: " + reason + 
-                                    ", Remoto: " + remote;
-                    logger.accept(mensaje);
-                    
+                    logger.accept(String.format("Conexión WebSocket cerrada. Código: %d, Razón: %s, Remoto: %b", 
+                            code, reason, remote));
                     if (!reconectando) {
                         reconectar();
                     }
@@ -110,129 +289,160 @@ public class StompClient {
 
                 @Override
                 public void onError(Exception ex) {
-                    logger.accept("Error en WebSocket: " + ex.getMessage());
+                    logger.accept("Error en WebSocket: " + ex.toString());
+                    ex.printStackTrace();
+                    if (!reconectando) {
+                        reconectar();
+                    }
                 }
             };
-            
+
+            // Agregar la cookie de sesión si está disponible
+            if (cookieSesion != null && !cookieSesion.isEmpty()) {
+                webSocketClient.addHeader("Cookie", "JSESSIONID=" + cookieSesion);
+            }
+
+            // Conectar con timeout
+            try {
+                webSocketClient.connectBlocking();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logger.accept("Conexión WebSocket interrumpida");
+                return;
+            }
+
             // Configurar encabezados
             webSocketClient.addHeader("Origin", "http://localhost:8080");
-            
+
             // Agregar encabezado de cookie si está disponible
             if (cookieSesion != null && !cookieSesion.isEmpty()) {
                 webSocketClient.addHeader("Cookie", "JSESSIONID=" + cookieSesion);
             }
-            
-            // Conectar con timeout
-            webSocketClient.connectBlocking();
-            
-        } catch (Exception e) {
+
+        } catch (URISyntaxException e) {
             logger.accept("Error al conectar WebSocket: " + e.getMessage());
             reconectar();
         }
     }
-    
+
     /**
-     * Procesa un mensaje STOMP recibido a través de SockJS
+     * Procesa un mensaje de control SockJS
      */
-    private void procesarMensajeSTOMP(String mensajeSockJS) {
+    private void procesarMensajeSTOMP(String mensaje) {
         try {
-            // El mensaje viene en formato SockJS: a["Mensaje STOMP"]
-            // Extraemos el mensaje STOMP real
-            String mensajeSTOMP = mensajeSockJS.substring(2, mensajeSockJS.length() - 1);
-            
-            // Dividir el mensaje en encabezados y cuerpo
-            int bodyStart = mensajeSTOMP.indexOf("\n\n");
-            if (bodyStart == -1) {
-                logger.accept("Formato de mensaje STOMP no válido: " + mensajeSockJS);
+            if (mensaje == null || mensaje.trim().isEmpty()) {
+                logger.accept("Mensaje STOMP vacío o nulo");
                 return;
             }
-            
-            String body = mensajeSTOMP.substring(bodyStart + 2).trim();
-            
-            // Procesar el cuerpo del mensaje
-            if (body.endsWith("\\u0000")) {
-                body = body.substring(0, body.length() - 6); // Eliminar '\\u0000'
-            } else if (body.endsWith("\"")) {
-                body = body.substring(0, body.length() - 1); // Eliminar comilla final
+
+            logger.accept("Procesando mensaje STOMP: " + mensaje);
+
+            // Si es un mensaje CONNECTED, suscribirse a los canales necesarios
+            if (mensaje.contains("CONNECTED")) {
+                logger.accept("Conexión STOMP establecida");
+                suscribirCanales();
             }
-            
-            // Eliminar comilla inicial si existe
-            if (body.startsWith("\"")) {
-                body = body.substring(1);
+
+            // Procesar el mensaje como JSON si es un MESSAGE
+            if (mensaje.contains("MESSAGE")) {
+                try {
+                    // Extraer el cuerpo del mensaje (después del doble salto de línea)
+                    String[] partes = mensaje.split("\\n\\n", 2);
+                    if (partes.length > 1) {
+                        String cuerpo = partes[1].trim();
+                        if (cuerpo.endsWith("\u0000")) {
+                            cuerpo = cuerpo.substring(0, cuerpo.length() - 1);
+                        }
+                        JSONObject json = new JSONObject(cuerpo);
+                        mensajeHandler.accept(json);
+                    }
+                } catch (Exception e) {
+                    logger.accept("Error al procesar mensaje JSON: " + e.getMessage());
+                }
             }
-            
-            // Procesar el mensaje como JSON
-            try {
-                JSONObject json = new JSONObject(body);
-                logger.accept("Mensaje STOMP procesado: " + json.toString(2));
-                mensajeHandler.accept(json);
-            } catch (Exception e) {
-                logger.accept("El mensaje no es un JSON válido: " + body);
-            }
-            
         } catch (Exception e) {
             logger.accept("Error al procesar mensaje STOMP: " + e.getMessage());
-            logger.accept("Mensaje original: " + mensajeSockJS);
+            e.printStackTrace();
         }
     }
-    
-    /**
-     * Suscribirse a un tema STOMP
-     */
-    private void suscribir(String destino) {
-        if (webSocketClient != null && webSocketClient.isOpen()) {
-            String subscriptionId = "sub-" + destino.replace("/", "-") + "-" + clientId;
-            String mensaje = String.format(STOMP_SUBSCRIBE_TEMPLATE, subscriptionId, destino);
-            webSocketClient.send(mensaje);
-            logger.accept("Suscrito a " + destino + " con ID: " + subscriptionId);
-        } else {
-            logger.accept("No se puede suscribir a " + destino + ": WebSocket no está conectado");
-        }
-    }
-    
-    /**
-     * Intenta reconectar al servidor después de un retraso
-     */
-    private void reconectar() {
-        if (reconectando) {
-            return;
-        }
-        
-        reconectando = true;
-        logger.accept("Intentando reconectar en 5 segundos...");
-        
-        new Thread(() -> {
-            try {
-                Thread.sleep(5000);
-                if (webSocketClient != null && webSocketClient.isClosed()) {
-                    logger.accept("Reconectando...");
-                    conectar();
+
+    private void procesarMensajeSockJS(String mensaje) {
+        try {
+            if (mensaje == null || mensaje.trim().isEmpty()) {
+                logger.accept("Mensaje SockJS vacío o nulo");
+                return;
+            }
+
+            logger.accept("Procesando mensaje SockJS: " + mensaje);
+
+            if ("o".equals(mensaje) || 
+                mensaje.startsWith("a[\"o\"]") || 
+                mensaje.startsWith("a[\\\\\"o\\\\\"]") ||
+                mensaje.startsWith("o[")) {
+                // Mensaje de apertura de conexión SockJS
+                logger.accept("Conexión SockJS establecida");
+
+                // Resetear contador de reintentos cuando la conexión es exitosa
+                if (reintentosReconexion > 0) {
+                    logger.accept("Conexión restablecida después de " + reintentosReconexion + " intentos");
+                    reintentosReconexion = 0;
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.accept("Hilo de reconexión interrumpido");
-            } finally {
-                reconectando = false;
+
+                // Enviar mensaje CONNECT STOMP después de un pequeño retraso
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(100);
+                        enviarMensajeSTOMP(STOMP_CONNECT);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }).start();
             }
-        }).start();
-    }
-    
-    /**
-     * Cierra la conexión WebSocket
-     */
-    public void cerrar() {
-        if (webSocketClient != null) {
-            if (webSocketClient.isOpen()) {
-                webSocketClient.send(STOMP_DISCONNECT_TEMPLATE);
-            }
-            webSocketClient.close();
+        } catch (Exception e) {
+            logger.accept("Error al procesar mensaje SockJS: " + e.getMessage());
+            e.printStackTrace();
         }
     }
-    
+
     /**
-     * Verifica si la conexión está abierta
+     * Verifica si la conexión está activa
      */
     public boolean estaConectado() {
         return webSocketClient != null && webSocketClient.isOpen() && sessionId != null;
+    }
+
+    /**
+     * Cierra la conexión WebSocket
+     */
+    /**
+     * Cierra la conexión WebSocket de manera ordenada
+     */
+    public void desconectar() {
+        if (webSocketClient != null) {
+            try {
+                // Enviar mensaje de desconexión STOMP
+                enviarMensajeSTOMP(STOMP_DISCONNECT);
+                
+                // Dar tiempo para que se envíe el mensaje de desconexión
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                
+                // Cerrar la conexión
+                webSocketClient.close();
+                logger.accept("Conexión WebSocket cerrada correctamente");
+            } catch (Exception e) {
+                logger.accept("Error al cerrar la conexión WebSocket: " + e.getMessage());
+                try {
+                    webSocketClient.close();
+                } catch (Exception ex) {
+                    // Ignorar errores al cerrar
+                }
+            } finally {
+                webSocketClient = null;
+            }
+        }
     }
 }

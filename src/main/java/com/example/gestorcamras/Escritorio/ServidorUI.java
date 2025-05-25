@@ -8,6 +8,8 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.event.ListSelectionEvent;
 import java.awt.*;
+import java.awt.image.BufferedImage;
+import javax.swing.ImageIcon;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -15,7 +17,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.net.URI;
 import java.util.Map;
-import com.example.gestorcamras.Escritorio.EquipoEscritorioDTO;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -26,7 +27,7 @@ public class ServidorUI extends JFrame {
     private final Map<Long, EquipoEscritorioDTO> equiposActivos = new HashMap<>();
     private WebSocketClient webSocketClient;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-    private static final String WS_URL = "ws://localhost:8080/ws/websocket";
+    private static final String WS_URL = "ws://localhost:8080/ws";
     private String sessionId = "";
     private int messageId = 1;
 
@@ -320,6 +321,9 @@ public class ServidorUI extends JFrame {
                 case "alarma":
                     procesarAlarma(json.optJSONObject("datos"));
                     break;
+                case "archivo_subido":
+                    procesarArchivoSubido(json.optJSONObject("datos"));
+                    break;
                 case "heartbeat":
                     // Solo registrar el latido si es necesario para depuración
                     log("Latido recibido del servidor");
@@ -396,6 +400,118 @@ public class ServidorUI extends JFrame {
             log("Error al obtener la dirección IP: " + e.getMessage());
         }
         return "localhost";
+    }
+    
+    /**
+     * Procesa una notificación de archivo subido
+     * @param datos Datos del archivo subido
+     */
+    private void procesarArchivoSubido(JSONObject datos) {
+        if (datos == null) {
+            log("Datos de archivo subido nulos");
+            return;
+        }
+        
+        try {
+            String nombreArchivo = datos.optString("nombreArchivo", "desconocido");
+            String tipo = datos.optString("tipo", "desconocido");
+            String camara = datos.optString("camara", "desconocida");
+            long tamano = datos.optLong("tamano", 0);
+            
+            String mensaje = String.format("✅ Archivo recibido: %s\n   Tipo: %s\n   Cámara: %s\n   Tamaño: %d bytes", 
+                nombreArchivo, tipo, camara, tamano);
+                
+            log(mensaje);
+            
+            // Mostrar notificación emergente
+            mostrarNotificacion("Nuevo archivo recibido", 
+                String.format("Archivo: %s\nCámara: %s", nombreArchivo, camara));
+                
+        } catch (Exception e) {
+            log("Error al procesar notificación de archivo subido: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Muestra una notificación emergente
+     * @param titulo Título de la notificación
+     * @param mensaje Mensaje a mostrar
+     */
+    private void mostrarNotificacion(String titulo, String mensaje) {
+        // Usar JOptionPane como alternativa si SystemTray no está disponible
+        if (!SystemTray.isSupported()) {
+            log("Mostrando notificación en ventana emergente (SystemTray no soportado)");
+            JOptionPane.showMessageDialog(
+                this, 
+                mensaje, 
+                titulo, 
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+        
+        // Usar SystemTray si está disponible
+        try {
+            // Obtener el SystemTray
+            SystemTray tray = SystemTray.getSystemTray();
+            
+            // Crear una imagen para el ícono (usando el ícono de la aplicación si está disponible)
+            Image image = null;
+            try {
+                // Intentar cargar el ícono de la aplicación
+                java.net.URL imageURL = getClass().getResource("/icon.png");
+                if (imageURL != null) {
+                    image = new ImageIcon(imageURL).getImage();
+                } else {
+                    // Crear una imagen simple si no se encuentra el ícono
+                    image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+                    Graphics2D g2d = ((BufferedImage)image).createGraphics();
+                    g2d.setColor(Color.BLUE);
+                    g2d.fillOval(0, 0, 32, 32);
+                    g2d.dispose();
+                }
+            } catch (Exception e) {
+                log("No se pudo cargar el ícono: " + e.getMessage());
+                // Crear una imagen simple en caso de error
+                image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
+            }
+            
+            // Crear el objeto TrayIcon
+            TrayIcon trayIcon = new TrayIcon(image, "Gestor de Cámaras");
+            trayIcon.setImageAutoSize(true);
+            
+            // Agregar el ícono al system tray
+            try {
+                tray.add(trayIcon);
+            } catch (AWTException e) {
+                log("Error al agregar el ícono al system tray: " + e.getMessage());
+                // Mostrar notificación de todos modos, aunque no se pueda agregar al system tray
+            }
+            
+            // Mostrar la notificación
+            trayIcon.displayMessage(titulo, mensaje, TrayIcon.MessageType.INFO);
+            
+            // Programar la eliminación del ícono después de un tiempo
+            new java.util.Timer().schedule( 
+                new java.util.TimerTask() {
+                    @Override
+                    public void run() {
+                        tray.remove(trayIcon);
+                    }
+                }, 
+                5000 
+            );
+            
+        } catch (Exception e) {
+            log("Error al mostrar notificación: " + e.getMessage());
+            // Mostrar notificación alternativa
+            JOptionPane.showMessageDialog(
+                this, 
+                mensaje, 
+                titulo, 
+                JOptionPane.INFORMATION_MESSAGE
+            );
+        }
     }
     
     private void procesarAlarma(JSONObject datos) {

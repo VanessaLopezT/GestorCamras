@@ -2,28 +2,21 @@ package com.example.gestorcamras.Escritorio;
 
 import com.example.gestorcamras.Escritorio.service.ClienteCamaraService;
 import com.example.gestorcamras.Escritorio.service.ClienteEquipoService;
-
-import java.io.ByteArrayOutputStream;
+import com.example.gestorcamras.Escritorio.service.FileUploadService;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.URLConnection;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.InetAddress;
 import java.net.NetworkInterface;
-import java.net.Inet4Address;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
-import java.nio.charset.StandardCharsets;
 import com.example.gestorcamras.Escritorio.websocket.StompClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -36,17 +29,21 @@ public class ClienteSwingController {
     private Consumer<Boolean> connectionStatusConsumer;
     private final ClienteCamaraService camaraService;
     private final ClienteEquipoService equipoService;
+    private final FileUploadService fileUploadService;
     private StompClient stompClient;
 
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
         this.cookieSesion = cookieSesion;
         this.servidorUrl = servidorUrl != null ? servidorUrl : "http://localhost:8080";
         // Inicializar servicios
-        this.camaraService = new ClienteCamaraService(this.servidorUrl, this.cookieSesion);
-        this.equipoService = new ClienteEquipoService(this.servidorUrl, this.cookieSesion);
+        this.camaraService = new ClienteCamaraService(this.servidorUrl, cookieSesion);
+        this.equipoService = new ClienteEquipoService(this.servidorUrl, cookieSesion);
+        this.fileUploadService = new FileUploadService(this.servidorUrl, cookieSesion, this::log);
         
-        // Configurar el logger para el servicio de equipos
-        this.equipoService.setLogger(this::log);
+        // Configurar logger para el servicio de equipos si es necesario
+        if (this.equipoService instanceof ClienteEquipoService) {
+            ((ClienteEquipoService) this.equipoService).setLogger(this::log);
+        }
         
         // Inicializar WebSocket
         inicializarWebSocket();
@@ -234,36 +231,38 @@ public class ClienteSwingController {
             log("Buscando dirección IP en interfaces de red...");
             List<String> posiblesIPs = new ArrayList<>();
             
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                NetworkInterface iface = interfaces.nextElement();
-                
-                // Filtrar interfaces no adecuadas
-                if (!esInterfazValida(iface)) {
-                    continue;
-                }
-                
-                // Buscar direcciones IPv4 en esta interfaz
-                Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress addr = addresses.nextElement();
-                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress()) {
-                        String ip = addr.getHostAddress();
-                        
-                        // Si es una IP válida, agregarla a la lista
-                        if (esIPValida(ip, excludedPrefixes)) {
-                            log("Dirección IP candidata: " + ip + " en " + iface.getDisplayName());
-                            posiblesIPs.add(ip);
+            try {
+                Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+                while (interfaces.hasMoreElements()) {
+                    NetworkInterface iface = interfaces.nextElement();
+                    
+                    // Filtrar interfaces no adecuadas
+                    if (iface == null || !iface.isUp() || iface.isLoopback() || iface.isVirtual()) {
+                        continue;
+                    }
+                    
+                    // Obtener direcciones IP de la interfaz
+                    Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                    while (addresses.hasMoreElements()) {
+                        InetAddress addr = addresses.nextElement();
+                        if (!addr.isLoopbackAddress() && addr instanceof java.net.Inet4Address) {
+                            String ip = addr.getHostAddress();
+                            if (esIPValida(ip, excludedPrefixes)) {
+                                posiblesIPs.add(ip);
+                                log("IP encontrada en interfaz " + iface.getDisplayName() + ": " + ip);
+                            }
                         }
                     }
                 }
-            }
-            
-            // Si encontramos IPs válidas, devolver la primera
-            if (!posiblesIPs.isEmpty()) {
-                String ipSeleccionada = posiblesIPs.get(0);
-                log("Seleccionada dirección IP: " + ipSeleccionada);
-                return ipSeleccionada;
+                
+                // Si encontramos IPs válidas, devolver la primera
+                if (!posiblesIPs.isEmpty()) {
+                    String ipSeleccionada = posiblesIPs.get(0);
+                    log("Seleccionada dirección IP: " + ipSeleccionada);
+                    return ipSeleccionada;
+                }
+            } catch (Exception e) {
+                log("Error al buscar direcciones IP en interfaces de red: " + e.getMessage());
             }
             
             // Si no se encuentra ninguna IP adecuada, usar la local con advertencia
@@ -536,12 +535,12 @@ public class ClienteSwingController {
                     int responseCode = response.statusCode();
                     String responseBody = response.body();
                     log("Respuesta del servidor - Código: " + responseCode + ", Cuerpo: " + responseBody);
-                    
+
                     try {
                         if (responseCode == 200) {
                             JSONArray camarasArray = new JSONArray(responseBody);
                             log("Se encontraron " + camarasArray.length() + " cámaras");
-                            
+
                             if (camarasConsumer != null) {
                                 camarasConsumer.accept(camarasArray);
                             }
@@ -550,7 +549,7 @@ public class ClienteSwingController {
                             if (location.contains("/login")) {
                                 log("Sesión expirada. Por favor, inicie sesión nuevamente.");
                             } else {
-                                log("RedirecciÃ³n inesperada al cargar cÃ¡maras: " + location);
+                                log("Redirección inesperada al cargar cámaras: " + location);
                             }
                             if (camarasConsumer != null) {
                                 camarasConsumer.accept(null);
@@ -565,29 +564,29 @@ public class ClienteSwingController {
                                 }
                             });
                         } else {
-                            log("Error al cargar cÃ¡maras. CÃ³digo: " + responseCode);
+                            log("Error al cargar cámaras. Código: " + responseCode);
                             if (camarasConsumer != null) {
                                 camarasConsumer.accept(null);
                             }
                         }
                     } catch (Exception e) {
-                        log("Error al procesar la respuesta de las cÃ¡maras: " + e.getMessage());
+                        log("Error al procesar la respuesta de las cámaras: " + e.getMessage());
                         if (camarasConsumer != null) {
                             camarasConsumer.accept(null);
                         }
                     }
                 })
                 .exceptionally(e -> {
-                    log("Error en la solicitud de cÃ¡maras: " + e.getMessage());
+                    log("Error en la solicitud de cámaras: " + e.getMessage());
                     if (camarasConsumer != null) {
                         camarasConsumer.accept(null);
                     }
                     return null;
                 });
-        } catch (Exception e) {
-            log("Error inesperado al cargar cÃ¡maras: " + e.getMessage());
-            if (camarasConsumer != null) {
-                camarasConsumer.accept(null);
+    } catch (Exception e) {
+        log("Error inesperado al cargar cámaras: " + e.getMessage());
+        if (camarasConsumer != null) {
+            camarasConsumer.accept(null);
             }
         }
     }
@@ -715,7 +714,21 @@ public class ClienteSwingController {
         }
     }
 
-    public void enviarArchivo(String equipoId, String camaraSeleccionada, File archivoSeleccionado, String tipo) {
+    /**
+     * Envía un archivo al servidor
+     * @param equipoId ID del equipo
+     * @param camaraSeleccionada Nombre de la cámara seleccionada
+     * @param archivoSeleccionado Archivo a enviar
+     * @param tipoParam Tipo de archivo (FOTO/VIDEO)
+     */
+    public void enviarArchivo(String equipoId, String camaraSeleccionada, File archivoSeleccionado, String tipoParam) {
+        log("=== INICIO DE ENVÍO DE ARCHIVO ===");
+        log("Equipo ID: " + equipoId);
+        log("Cámara seleccionada: " + camaraSeleccionada);
+        log("Archivo: " + (archivoSeleccionado != null ? archivoSeleccionado.getAbsolutePath() : "null"));
+        log("Tamaño del archivo: " + (archivoSeleccionado != null ? archivoSeleccionado.length() + " bytes" : "N/A"));
+        log("Tipo de archivo: " + tipoParam);
+        
         if (archivoSeleccionado == null) {
             log("Error: No hay archivo seleccionado para enviar.");
             return;
@@ -726,136 +739,69 @@ public class ClienteSwingController {
             return;
         }
 
-        String boundary = "===" + System.currentTimeMillis() + "===";
+        // Validar que el tipo sea válido (FOTO/VIDEO)
+        if (!tipoParam.equalsIgnoreCase("FOTO") && !tipoParam.equalsIgnoreCase("VIDEO")) {
+            log("Error: El tipo de archivo debe ser 'FOTO' o 'VIDEO'");
+            return;
+        }
+        
+        // Convertir a mayúsculas para asegurar que coincida con el enum
+        final String tipo = tipoParam.toUpperCase();
+        log("Tipo validado: " + tipo);
 
-        try {
-            byte[] fileData = getMultipartFormData(boundary, tipo, camaraSeleccionada, archivoSeleccionado);
-            
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(servidorUrl + "/api/equipos/" + equipoId + "/camaras/" + camaraSeleccionada + "/archivo"))
-                    .header("Cookie", cookieSesion)
-                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                    .POST(HttpRequest.BodyPublishers.ofByteArray(fileData))
-                    .build();
+        // Obtener las cámaras del equipo
+        Consumer<String> successHandler = new Consumer<String>() {
+            @Override
+            public void accept(String camaras) {
+                try {
+                    JSONArray camarasArray = new JSONArray(camaras);
+                    String camaraId = null;
+                    final String[] nombreCamara = { null };
                     
-            client.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                .thenAccept(response -> {
-                    int responseCode = response.statusCode();
-                    String respuesta = response.body();
-
-                    if (responseCode == 200 || responseCode == 201) {
-                        log("Archivo enviado correctamente. Código: " + responseCode);
-                    } else {
-                        log("Error al enviar archivo. Código: " + responseCode);
-                        log(respuesta);
+                    // Buscar la cámara por nombre
+                    for (int i = 0; i < camarasArray.length(); i++) {
+                        JSONObject camara = camarasArray.getJSONObject(i);
+                        if (camara.getString("nombre").equals(camaraSeleccionada)) {
+                            // Manejar el ID de la cámara que puede ser número o cadena
+                            if (camara.get("idCamara") instanceof Integer) {
+                                camaraId = String.valueOf(camara.getInt("idCamara"));
+                            } else {
+                                camaraId = camara.getString("idCamara");
+                            }
+                            nombreCamara[0] = camara.getString("nombre");
+                            log("Cámara encontrada - ID: " + camaraId + ", Nombre: " + nombreCamara[0]);
+                            break;
+                        }
                     }
-                })
-                .exceptionally(e -> {
-                    log("Excepción al enviar archivo: " + e.getMessage());
-                    return null;
-                });
-        } catch (Exception e) {
-            log("Error al preparar el envío del archivo: " + e.getMessage());
-        }
-    }
-
-    private byte[] getMultipartFormData(String boundary, String tipo, String camaraSeleccionada, File archivoSeleccionado) throws IOException {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        PrintWriter writer = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8), true);
-
-        // Parte: tipo de archivo
-        writer.append("--").append(boundary).append("\r\n");
-        writer.append("Content-Disposition: form-data; name=\"tipo\"\r\n");
-        writer.append("Content-Type: text/plain; charset=UTF-8\r\n\r\n");
-        writer.append(tipo.toUpperCase()).append("\r\n");
-        writer.flush();
-
-        // Parte: nombre cámara
-        writer.append("--").append(boundary).append("\r\n");
-        writer.append("Content-Disposition: form-data; name=\"camara\"\r\n");
-        writer.append("Content-Type: text/plain; charset=UTF-8\r\n\r\n");
-        writer.append(camaraSeleccionada).append("\r\n");
-        writer.flush();
-
-        // Parte: archivo
-        writer.append("--").append(boundary).append("\r\n");
-        writer.append("Content-Disposition: form-data; name=\"archivo\"; filename=\"" + archivoSeleccionado.getName() + "\"\r\n");
-        writer.append("Content-Type: ").append(URLConnection.guessContentTypeFromName(archivoSeleccionado.getName()))
-                .append("\r\n");
-        writer.append("Content-Transfer-Encoding: binary\r\n\r\n");
-        writer.flush();
-
-        // Escribimos archivo binario
-        try (FileInputStream inputStream = new FileInputStream(archivoSeleccionado)) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
+                    
+                    if (camaraId == null) {
+                        log("Error: No se encontró el ID de la cámara: " + camaraSeleccionada);
+                        log("Cámaras disponibles: " + camarasArray.toString(2));
+                        return;
+                    }
+                    
+                    // Usar el servicio de subida de archivos
+                    fileUploadService.enviarArchivo(equipoId, camaraId, nombreCamara[0], archivoSeleccionado, tipo);
+                    
+                } catch (Exception e) {
+                    log("Error al procesar la respuesta de las cámaras: " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
-        }
-        outputStream.write("\r\n".getBytes(StandardCharsets.UTF_8));
-
-        // Fin del multipart
-        writer.append("--").append(boundary).append("--").append("\r\n");
-        writer.flush();
-
-        return outputStream.toByteArray();
-    }
-
-    public void detener() {
-        // Cerrar conexión STOMP WebSocket
-        if (stompClient != null) {
-            stompClient.cerrar();
-            stompClient = null;
-        }
+        };
         
-        // Detener el temporizador de ping
-        if (timerPing != null) {
-            timerPing.cancel();
-            timerPing = null;
-        }
+        // Crear un consumer para manejar errores
+        Consumer<String> errorHandler = new Consumer<String>() {
+            @Override
+            public void accept(String error) {
+                log("Error al obtener las cámaras: " + error);
+            }
+        };
+        
+        // Llamar al servicio para obtener las cámaras
+        camaraService.obtenerCamaras(equipoId, successHandler, errorHandler);
     }
     
-    /**
-     * Verifica si una interfaz de red es válida para su uso
-     * @param iface Interfaz de red a verificar
-     * @return true si la interfaz es válida, false en caso contrario
-     */
-    private boolean esInterfazValida(NetworkInterface iface) {
-        if (iface == null) return false;
-        
-        try {
-            // Verificar si la interfaz está activa y no es de loopback
-            if (!iface.isUp() || iface.isLoopback()) {
-                return false;
-            }
-            
-            // Verificar si es una interfaz virtual o de máquina virtual
-            String displayName = iface.getDisplayName().toLowerCase();
-            if (iface.isVirtual() || 
-                displayName.contains("virtual") ||
-                displayName.contains("vmware") ||
-                displayName.contains("virtualbox") ||
-                displayName.contains("tunnel")) {
-                return false;
-            }
-            
-            // Verificar si tiene direcciones IP
-            return iface.getInetAddresses().hasMoreElements();
-            
-        } catch (Exception e) {
-            log("Error al verificar interfaz de red: " + e.getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * Verifica si una dirección IP es válida según los prefijos excluidos
-     * @param ip Dirección IP a verificar
-     * @param excludedPrefixes Lista de prefijos de IP a excluir
-     * @return true si la IP es válida, false en caso contrario
-     */
     private boolean esIPValida(String ip, String[] excludedPrefixes) {
         if (ip == null || ip.trim().isEmpty()) {
             return false;
@@ -886,5 +832,32 @@ public class ClienteSwingController {
         }
         
         return true;
+    }
+    
+    /**
+     * Detiene cualquier operación en curso y libera recursos.
+     */
+    public void detener() {
+        // Detener el temporizador de ping si está activo
+        if (timerPing != null) {
+            timerPing.cancel();
+            timerPing = null;
+        }
+        
+        // Cerrar la conexión WebSocket si está abierta
+        if (stompClient != null) {
+            try {
+                stompClient.desconectar();
+            } catch (Exception e) {
+                log("Error al cerrar la conexión WebSocket: " + e.getMessage());
+            }
+        }
+        
+        // Notificar que la conexión se ha cerrado
+        if (connectionStatusConsumer != null) {
+            connectionStatusConsumer.accept(false);
+        }
+        
+        log("Recursos liberados correctamente");
     }
 }

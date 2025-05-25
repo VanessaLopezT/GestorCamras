@@ -7,7 +7,6 @@ import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
-import java.io.IOException;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.time.LocalDateTime;
 
@@ -22,7 +21,6 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 
 import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
 
@@ -133,9 +131,9 @@ public class ClienteSwingUI extends JFrame {
         JButton btnEnviarVideo = new JButton("Enviar video");
 
         btnSeleccionarImagen.addActionListener(e -> seleccionarArchivo("imagen"));
-        btnEnviarImagen.addActionListener(e -> enviarArchivo("imagen"));
+        btnEnviarImagen.addActionListener(e -> enviarArchivo("FOTO"));
         btnSeleccionarVideo.addActionListener(e -> seleccionarArchivo("video"));
-        btnEnviarVideo.addActionListener(e -> enviarArchivo("video"));
+        btnEnviarVideo.addActionListener(e -> enviarArchivo("VIDEO"));
 
         panelBotones.add(btnSeleccionarImagen);
         panelBotones.add(btnEnviarImagen);
@@ -223,35 +221,7 @@ public class ClienteSwingUI extends JFrame {
     
     private JLabel equipoIdLabel; // Add this as a class field
 
-    /**
-     * Carga las cámaras existentes para el equipo especificado sin crear nuevas cámaras automáticamente.
-     * @param equipoId ID del equipo del cual cargar las cámaras
-     */
-    /**
-     * Carga las cámaras del equipo actual y las muestra en la tabla
-     */
-    private void cargarCamarasConEquipo(String equipoId) {
-        // Actualizar la etiqueta del ID del equipo
-        if (equipoIdLabel != null) {
-            equipoIdLabel.setText("ID Equipo: " + equipoId);
-        }
-        
-        log("Cargando cámaras para el equipo: " + equipoId);
-        controller.cargarCamaras(equipoId, camaras -> {
-            SwingUtilities.invokeLater(() -> {
-                if (camaras != null && camaras.length() > 0) {
-                    log("Se encontraron " + camaras.length() + " cámaras");
-                    // Actualizar el modelo de la tabla con las cámaras
-                    modeloCamarasTabla.setCamaras(camaras);
-                    log("Tabla de cámaras actualizada");
-                } else {
-                    log("No se encontraron cámaras. Use el botón 'Cargar cámaras' para agregar una nueva cámara.");
-                    modeloCamarasTabla.setCamaras(null); // Limpiar la tabla
-                }
-            });
-        });
-    }
-    
+
     /**
      * Método que se llama al hacer clic en el botón 'Cargar cámaras'.
      * Este método intenta registrar una nueva cámara local si no hay cámaras existentes.
