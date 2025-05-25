@@ -521,8 +521,11 @@ public class ClienteSwingController {
                     .followRedirects(HttpClient.Redirect.NORMAL)
                     .build();
                     
+            String url = servidorUrl + "/api/camaras/equipo/" + equipoId;
+            log("Solicitando cámaras desde: " + url);
+                    
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(servidorUrl + "/api/equipos/" + equipoId))
+                    .uri(URI.create(url))
                     .header("Cookie", cookieSesion)
                     .header("Accept", "application/json")
                     .GET()
@@ -532,78 +535,61 @@ public class ClienteSwingController {
                 .thenAccept(response -> {
                     int responseCode = response.statusCode();
                     String responseBody = response.body();
+                    log("Respuesta del servidor - Código: " + responseCode + ", Cuerpo: " + responseBody);
                     
-                    if (responseCode == 200) {
-                        try {
-                            JSONObject obj = new JSONObject(responseBody);
-                            JSONArray camarasArray = new JSONArray();
+                    try {
+                        if (responseCode == 200) {
+                            JSONArray camarasArray = new JSONArray(responseBody);
+                            log("Se encontraron " + camarasArray.length() + " cámaras");
                             
-                            if (obj.has("camaras")) {
-                                Object camarasObj = obj.get("camaras");
-                                
-                                if (camarasObj instanceof JSONArray) {
-                                    camarasArray = (JSONArray) camarasObj;
-                                } else if (camarasObj instanceof JSONObject) {
-                                    camarasArray.put(camarasObj);
-                                }
-                                
-                                if (camarasConsumer != null) {
-                                    camarasConsumer.accept(camarasArray);
-                                }
-                            } else {
-                                log("No se encontraron cámaras para este equipo");
-                                if (camarasConsumer != null) {
-                                    camarasConsumer.accept(new JSONArray());
-                                }
+                            if (camarasConsumer != null) {
+                                camarasConsumer.accept(camarasArray);
                             }
-                        } catch (Exception e) {
-                            log("Error al procesar la respuesta de las cámaras: " + e.getMessage());
+                        } else if (responseCode == 302) {
+                            String location = response.headers().firstValue("Location").orElse("");
+                            if (location.contains("/login")) {
+                                log("Sesión expirada. Por favor, inicie sesión nuevamente.");
+                            } else {
+                                log("RedirecciÃ³n inesperada al cargar cÃ¡maras: " + location);
+                            }
+                            if (camarasConsumer != null) {
+                                camarasConsumer.accept(null);
+                            }
+                        } else if (responseCode == 404) {
+                            log("El equipo no existe, intentando registrar uno nuevo");
+                            registrarEquipo(id -> {
+                                if (id != null) {
+                                    cargarCamaras(id, camarasConsumer);
+                                } else if (camarasConsumer != null) {
+                                    camarasConsumer.accept(null);
+                                }
+                            });
+                        } else {
+                            log("Error al cargar cÃ¡maras. CÃ³digo: " + responseCode);
                             if (camarasConsumer != null) {
                                 camarasConsumer.accept(null);
                             }
                         }
-                    } else if (responseCode == 302) {
-                        String location = response.headers().firstValue("Location").orElse("");
-                        if (location.contains("/login")) {
-                            log("Sesión expirada. Por favor, inicie sesión nuevamente.");
-                        } else {
-                            log("Redirección inesperada al cargar cámaras: " + location);
-                        }
-                        if (camarasConsumer != null) {
-                            camarasConsumer.accept(null);
-                        }
-                    } else if (responseCode == 404) {
-                        log("El equipo no existe, intentando registrar uno nuevo");
-                        registrarEquipo(id -> {
-                            if (id != null) {
-                                cargarCamaras(id, camarasConsumer);
-                            } else if (camarasConsumer != null) {
-                                camarasConsumer.accept(null);
-                            }
-                        });
-                    } else {
-                        log("Error al cargar cámaras. Código: " + responseCode + ", Respuesta: " + responseBody);
+                    } catch (Exception e) {
+                        log("Error al procesar la respuesta de las cÃ¡maras: " + e.getMessage());
                         if (camarasConsumer != null) {
                             camarasConsumer.accept(null);
                         }
                     }
                 })
                 .exceptionally(e -> {
-                    log("Error en la solicitud de cámaras: " + e.getMessage());
+                    log("Error en la solicitud de cÃ¡maras: " + e.getMessage());
                     if (camarasConsumer != null) {
                         camarasConsumer.accept(null);
                     }
                     return null;
                 });
         } catch (Exception e) {
-            log("Error en cargarCamaras: " + e.getMessage());
+            log("Error inesperado al cargar cÃ¡maras: " + e.getMessage());
             if (camarasConsumer != null) {
                 camarasConsumer.accept(null);
             }
         }
-
-            // El código ya se movió dentro del manejador de la respuesta asíncrona
-            // Este bloque ya no es necesario aquí
     }
 
     /**

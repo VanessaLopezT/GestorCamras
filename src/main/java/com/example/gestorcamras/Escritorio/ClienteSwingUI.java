@@ -9,33 +9,30 @@ import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.time.LocalDateTime;
 
-import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
-import org.json.JSONObject;
+import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
 
 public class ClienteSwingUI extends JFrame {
     private static final long serialVersionUID = 1L;
     
     private JTextField txtServidorUrl;
     private String equipoIdGenerado;  // Para almacenar el ID del equipo generado
-    private DefaultListModel<String> modeloCamaras;
-    private JList<String> listaCamaras;
     private JTextArea txtLog;
     private File archivoSeleccionado;
-    
+    private JTable tablaCamaras;
+    private CamaraTableModel modeloCamarasTabla;
     private final ClienteSwingController controller;
     private final String usuario;
     
@@ -74,11 +71,17 @@ public class ClienteSwingUI extends JFrame {
     
     private void initUI() {
         setTitle("Cliente Equipo - Gestor de Cámaras (Usuario: " + usuario + ")");
-        setSize(800, 600);
+        setSize(1000, 700);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         JPanel panel = new JPanel(new BorderLayout(10, 10));
+        
+        // Inicializar el modelo de la tabla de cámaras
+        modeloCamarasTabla = new CamaraTableModel();
+        tablaCamaras = new JTable(modeloCamarasTabla);
+        tablaCamaras.setFillsViewportHeight(true);
+        tablaCamaras.setAutoCreateRowSorter(true);
 
         // Panel superior para URL y equipo
         JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -111,16 +114,14 @@ public class ClienteSwingUI extends JFrame {
 
         panel.add(panelArriba, BorderLayout.NORTH);
 
-        // Panel central para lista de cámaras y botones
-        modeloCamaras = new DefaultListModel<>();
-        listaCamaras = new JList<>(modeloCamaras);
-        listaCamaras.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        JScrollPane scrollCamaras = new JScrollPane(listaCamaras);
-        scrollCamaras.setPreferredSize(new Dimension(200, 150));
-
-        JPanel panelCentro = new JPanel(new BorderLayout());
+        // Panel central para tabla de cámaras y botones
+        JPanel panelCentro = new JPanel(new BorderLayout(5, 5));
         panelCentro.add(new JLabel("Cámaras disponibles:"), BorderLayout.NORTH);
-        panelCentro.add(scrollCamaras, BorderLayout.CENTER);
+        
+        // Panel para la tabla de cámaras
+        JScrollPane scrollTabla = new JScrollPane(tablaCamaras);
+        scrollTabla.setPreferredSize(new Dimension(0, 200));
+        panelCentro.add(scrollTabla, BorderLayout.CENTER);
 
         // Botones para seleccionar y enviar archivos
         JPanel panelBotones = new JPanel(new GridLayout(2, 2, 10, 10));
@@ -224,34 +225,26 @@ public class ClienteSwingUI extends JFrame {
      * Carga las cámaras existentes para el equipo especificado sin crear nuevas cámaras automáticamente.
      * @param equipoId ID del equipo del cual cargar las cámaras
      */
+    /**
+     * Carga las cámaras del equipo actual y las muestra en la tabla
+     */
     private void cargarCamarasConEquipo(String equipoId) {
-        // Actualizar la etiqueta del ID del equipo si existe
+        // Actualizar la etiqueta del ID del equipo
         if (equipoIdLabel != null) {
             equipoIdLabel.setText("ID Equipo: " + equipoId);
         }
         
-        // Limpiar el modelo de cámaras
-        modeloCamaras.clear();
-        
         log("Cargando cámaras para el equipo: " + equipoId);
         controller.cargarCamaras(equipoId, camaras -> {
-            // Actualizar la interfaz de usuario en el hilo de eventos de Swing
             SwingUtilities.invokeLater(() -> {
                 if (camaras != null && camaras.length() > 0) {
                     log("Se encontraron " + camaras.length() + " cámaras");
-                    modeloCamaras.clear(); // Limpiar antes de agregar
-                    for (int i = 0; i < camaras.length(); i++) {
-                        try {
-                            JSONObject camara = camaras.getJSONObject(i);
-                            String nombreCamara = camara.getString("nombre");
-                            modeloCamaras.addElement(nombreCamara);
-                            log("Cámara agregada: " + nombreCamara);
-                        } catch (Exception e) {
-                            log("Error al procesar la cámara: " + e.getMessage());
-                        }
-                    }
+                    // Actualizar el modelo de la tabla con las cámaras
+                    modeloCamarasTabla.setCamaras(camaras);
+                    log("Tabla de cámaras actualizada");
                 } else {
                     log("No se encontraron cámaras. Use el botón 'Cargar cámaras' para agregar una nueva cámara.");
+                    modeloCamarasTabla.setCamaras(null); // Limpiar la tabla
                 }
             });
         });
@@ -303,37 +296,35 @@ public class ClienteSwingUI extends JFrame {
                     SwingUtilities.invokeLater(() -> {
                         if (camaras != null && camaras.length() > 0) {
                             log("Se encontraron " + camaras.length() + " cámaras");
-                            modeloCamaras.clear(); // Limpiar antes de agregar
-                            for (int i = 0; i < camaras.length(); i++) {
-                                try {
-                                    JSONObject camara = camaras.getJSONObject(i);
-                                    String nombreCamara = camara.getString("nombre");
-                                    modeloCamaras.addElement(nombreCamara);
-                                    log("Cámara agregada: " + nombreCamara);
-                                } catch (Exception e) {
-                                    log("Error al procesar la cámara: " + e.getMessage());
-                                }
-                            }
-                            registroEnCurso[0] = false; // Restablecer el estado
+                            // Actualizar la tabla con las cámaras
+                            modeloCamarasTabla.setCamaras(camaras);
+                            log("Tabla de cámaras actualizada");
                         } else if (!registroEnCurso[0]) {
                             log("No se encontraron cámaras. Registrando una nueva cámara local...");
                             registroEnCurso[0] = true; // Marcar que hay un registro en curso
                             
                             // Si no hay cámaras, intentar registrar una cámara local
+                            log("Registrando nueva cámara local...");
                             controller.registrarCamaraLocal(equipoId, camaraId -> {
                                 SwingUtilities.invokeLater(() -> {
+                                    registroEnCurso[0] = false; // Restablecer el estado de registro
                                     if (camaraId != null) {
                                         log("Cámara local registrada con ID: " + camaraId);
-                                        // Volver a cargar las cámaras después de un breve retraso
-                                        Timer timer = new Timer(1000, e -> {
-                                            ((Timer)e.getSource()).stop();
-                                            new CargadorCamaras(equipoId, registroEnCurso).run();
+                                        // Volver a cargar las cámaras inmediatamente
+                                        log("Actualizando lista de cámaras...");
+                                        controller.cargarCamaras(equipoId, camarasActualizadas -> {
+                                            SwingUtilities.invokeLater(() -> {
+                                                if (camarasActualizadas != null && camarasActualizadas.length() > 0) {
+                                                    log("Se encontraron " + camarasActualizadas.length() + " cámaras después del registro");
+                                                    modeloCamarasTabla.setCamaras(camarasActualizadas);
+                                                    log("Tabla de cámaras actualizada después del registro");
+                                                } else {
+                                                    log("No se pudieron cargar las cámaras después del registro");
+                                                }
+                                            });
                                         });
-                                        timer.setRepeats(false);
-                                        timer.start();
                                     } else {
                                         log("Error al registrar la cámara local");
-                                        registroEnCurso[0] = false; // Restablecer si falla
                                     }
                                 });
                             });
@@ -362,19 +353,21 @@ public class ClienteSwingUI extends JFrame {
             return;
         }
         
-        String camaraSeleccionada = listaCamaras.getSelectedValue();
+        int filaSeleccionada = tablaCamaras.getSelectedRow();
+        if (filaSeleccionada == -1) {
+            log("Error: Debes seleccionar una cámara de la tabla.");
+            return;
+        }
+        
+        // Obtener el nombre de la cámara seleccionada
+        String nombreCamara = (String) modeloCamarasTabla.getValueAt(filaSeleccionada, 1);
         
         if (archivoSeleccionado == null) {
             log("Error: No hay archivo seleccionado para enviar.");
             return;
         }
         
-        if (camaraSeleccionada == null) {
-            log("Error: Debes seleccionar una cámara.");
-            return;
-        }
-        
-        controller.enviarArchivo(equipoIdGenerado, camaraSeleccionada, archivoSeleccionado, tipo);
+        controller.enviarArchivo(equipoIdGenerado, nombreCamara, archivoSeleccionado, tipo);
     }
     
     private void log(String mensaje) {
