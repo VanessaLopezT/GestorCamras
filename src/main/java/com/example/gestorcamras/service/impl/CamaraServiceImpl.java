@@ -7,6 +7,7 @@ import com.example.gestorcamras.repository.EquipoRepository;
 import com.example.gestorcamras.repository.UbicacionRepository;
 import com.example.gestorcamras.repository.UsuarioRepository;
 import com.example.gestorcamras.service.CamaraService;
+import com.example.gestorcamras.service.GeocodingService;
 import com.example.gestorcamras.dto.CamaraDTO;
 import java.util.stream.Collectors;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -31,6 +32,9 @@ public class CamaraServiceImpl implements CamaraService {
 
     @Autowired
     private UbicacionRepository ubicacionRepository;
+    
+    @Autowired
+    private GeocodingService geocodingService;
 
     @Autowired
     private EquipoRepository equipoRepository;
@@ -53,7 +57,20 @@ public class CamaraServiceImpl implements CamaraService {
         dto.setActiva(camara.isActiva());
         dto.setTipo(camara.getTipo());
         dto.setFechaRegistro(camara.getFechaRegistro());
-        dto.setUbicacionId(camara.getUbicacion() != null ? camara.getUbicacion().getId() : null);
+        
+        // Set location data
+        if (camara.getUbicacion() != null) {
+            dto.setUbicacionId(camara.getUbicacion().getId());
+            dto.setLatitud(camara.getUbicacion().getLatitud());
+            dto.setLongitud(camara.getUbicacion().getLongitud());
+            dto.setDireccion(camara.getUbicacion().getDireccion());
+        } else {
+            dto.setUbicacionId(null);
+            dto.setLatitud(null);
+            dto.setLongitud(null);
+            dto.setDireccion(null);
+        }
+        
         dto.setPropietarioId(camara.getPropietario() != null ? camara.getPropietario().getIdUsuario() : null);
         dto.setEquipoId(camara.getEquipo() != null ? camara.getEquipo().getIdEquipo() : null);
         return dto;
@@ -65,29 +82,56 @@ public class CamaraServiceImpl implements CamaraService {
     }
 
 
+    @Override
+    @Transactional
     public Camara toEntity(CamaraDTO dto) {
         if (dto == null) return null;
+        
         Camara camara = new Camara();
-        camara.setIdCamara(dto.getIdCamara());
+        if (dto.getIdCamara() != null) {
+            camara = camaraRepository.findById(dto.getIdCamara())
+                .orElse(new Camara());
+        }
+        
         camara.setNombre(dto.getNombre());
         camara.setIp(dto.getIp());
         camara.setActiva(dto.isActiva());
         camara.setTipo(dto.getTipo());
         camara.setFechaRegistro(dto.getFechaRegistro());
-
-        // Asociar Ubicacion
+        
+        // Manejar la relación con Ubicación
         if (dto.getUbicacionId() != null) {
-            ubicacionRepository.findById(dto.getUbicacionId())
-                    .ifPresent(camara::setUbicacion);
+            // Si ya existe una ubicación, la asignamos
+            ubicacionRepository.findById(dto.getUbicacionId()).ifPresent(camara::setUbicacion);
+        } else if (dto.getLatitud() != null && dto.getLongitud() != null) {
+            // Si hay coordenadas pero no ID de ubicación, creamos o actualizamos la ubicación
+            com.example.gestorcamras.model.Ubicacion ubicacion = new com.example.gestorcamras.model.Ubicacion();
+            ubicacion.setLatitud(dto.getLatitud());
+            ubicacion.setLongitud(dto.getLongitud());
+            
+            // Si hay una dirección, la guardamos
+            if (dto.getDireccion() != null && !dto.getDireccion().trim().isEmpty()) {
+                ubicacion.setDireccion(dto.getDireccion());
+            } else {
+                // Intentar obtener la dirección de forma asíncrona
+                obtenerYActualizarDireccion(dto.getLatitud(), dto.getLongitud(), camara);
+            }
+            
+            // Guardar la ubicación
+            ubicacion = ubicacionRepository.save(ubicacion);
+            camara.setUbicacion(ubicacion);
+        } else {
+            camara.setUbicacion(null);
         }
-
-// Asociar Equipo
+        
+        // Manejar la relación con Equipo
         if (dto.getEquipoId() != null) {
-            equipoRepository.findById(dto.getEquipoId())
-                    .ifPresent(camara::setEquipo);
+            equipoRepository.findById(dto.getEquipoId()).ifPresent(camara::setEquipo);
+        } else {
+            camara.setEquipo(null);
         }
-
-// Asociar Propietario (si aplica)
+        
+        // Manejar la relación con Propietario
         if (dto.getPropietarioId() != null) {
             usuarioRepository.findById(dto.getPropietarioId())
                     .ifPresent(camara::setPropietario);
@@ -95,11 +139,51 @@ public class CamaraServiceImpl implements CamaraService {
 
         return camara;
     }
+    
+    /**
+     * Obtiene la dirección de forma asíncrona y actualiza la cámara
+     */
+    private void obtenerYActualizarDireccion(Double latitud, Double longitud, Camara camara) {
+        if (latitud == null || longitud == null) return;
+        
+        geocodingService.obtenerDireccion(latitud, longitud)
+            .thenAccept(direccion -> {
+                if (direccion != null && !direccion.isEmpty()) {
+                    // Actualizar en un nuevo hilo para evitar problemas de transacción
+                    new Thread(() -> {
+                        try {
+                            // Buscar la cámara más reciente
+                            Camara camaraActualizada = camaraRepository.findById(camara.getIdCamara())
+                                .orElse(null);
+                                
+                            if (camaraActualizada != null && camaraActualizada.getUbicacion() != null) {
+                                com.example.gestorcamras.model.Ubicacion ubicacion = camaraActualizada.getUbicacion();
+                                ubicacion.setDireccion(direccion);
+                                ubicacionRepository.save(ubicacion);
+                            }
+                        } catch (Exception e) {
+                            // Registrar el error pero no fallar
+                            e.printStackTrace();
+                        }
+                    }).start();
+                }
+            });
+    }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CamaraDTO> obtenerTodas() {
         return camaraRepository.findAll()
                 .stream()
+                .peek(camara -> {
+                    // Inicializar relaciones necesarias
+                    if (camara.getEquipo() != null) {
+                        camara.getEquipo().getNombre();
+                    }
+                    if (camara.getUbicacion() != null) {
+                        camara.getUbicacion().getId();
+                    }
+                })
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -127,6 +211,10 @@ public class CamaraServiceImpl implements CamaraService {
             // Inicializar relaciones necesarias
             if (camara.getEquipo() != null) {
                 camara.getEquipo().getNombre();
+            }
+            // Inicializar ubicación si existe
+            if (camara.getUbicacion() != null) {
+                camara.getUbicacion().getId();
             }
             CamaraDTO dto = toDTO(camara);
             
@@ -219,6 +307,9 @@ public class CamaraServiceImpl implements CamaraService {
                     // Inicializar las relaciones necesarias
                     if (camara.getEquipo() != null) {
                         camara.getEquipo().getNombre();
+                    }
+                    if (camara.getUbicacion() != null) {
+                        camara.getUbicacion().getId();
                     }
                     return toDTO(camara);
                 })

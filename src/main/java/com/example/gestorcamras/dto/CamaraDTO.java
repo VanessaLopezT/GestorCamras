@@ -11,6 +11,9 @@ public class CamaraDTO {
     private LocalDateTime fechaRegistro;
 
     private Long ubicacionId;
+    private Double latitud;  // Nuevo campo para latitud
+    private Double longitud;  // Nuevo campo para longitud
+    private String direccion; // Dirección formateada
     private Long propietarioId;
     private Long equipoId;
 
@@ -41,4 +44,13 @@ public class CamaraDTO {
 
     public Long getEquipoId() { return equipoId; }
     public void setEquipoId(Long equipoId) { this.equipoId = equipoId; }
+    
+    public Double getLatitud() { return latitud; }
+    public void setLatitud(Double latitud) { this.latitud = latitud; }
+    
+    public Double getLongitud() { return longitud; }
+    public void setLongitud(Double longitud) { this.longitud = longitud; }
+    
+    public String getDireccion() { return direccion; }
+    public void setDireccion(String direccion) { this.direccion = direccion; }
 }

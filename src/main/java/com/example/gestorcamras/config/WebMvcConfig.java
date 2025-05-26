@@ -10,7 +10,7 @@ import java.nio.file.Paths;
 public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
-    public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    public void addResourceHandlers(@org.springframework.lang.NonNull ResourceHandlerRegistry registry) {
         // Configuración para servir archivos estáticos desde el directorio de la aplicación
         String uploadDir = Paths.get("archivos_multimedia").toAbsolutePath().toString();
         

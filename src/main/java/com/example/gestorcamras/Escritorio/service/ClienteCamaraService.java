@@ -5,6 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpRequest.BodyPublishers;
+import java.time.Duration;
 
 import java.util.function.Consumer;
 import org.json.JSONObject;
@@ -68,7 +69,7 @@ public class ClienteCamaraService {
             logger.accept("Registrando cámara local...");
             String nombreCamara = ("Cámara_Local_" + System.currentTimeMillis()).replace(" ", "_");
             
-            // Crear el objeto JSON para la cámara
+            // Crear el objeto JSON base para la cámara
             JSONObject camaraJson = new JSONObject();
             camaraJson.put("nombre", nombreCamara);
             camaraJson.put("ip", "127.0.0.1");
@@ -76,7 +77,108 @@ public class ClienteCamaraService {
             camaraJson.put("activa", true);
             camaraJson.put("equipoId", Long.parseLong(equipoId));
             
-            // Crear la solicitud para registrar la cámara
+            // Primero, obtener la ubicación
+            obtenerUbicacion(ubicacion -> {
+                try {
+                    // Una vez que tenemos la ubicación, actualizamos el JSON de la cámara
+                    if (ubicacion != null) {
+                        camaraJson.put("latitud", ubicacion.getDouble("latitud"));
+                        camaraJson.put("longitud", ubicacion.getDouble("longitud"));
+                        camaraJson.put("direccion", ubicacion.getString("direccion"));
+                    }
+                    
+                    // Ahora que tenemos la ubicación (o no), procedemos con el registro
+                    registrarCamaraConUbicacion(client, camaraJson, camaraIdConsumer, logger, csrfToken);
+                    
+                } catch (Exception e) {
+                    logger.accept("Error al procesar la ubicación: " + e.getMessage());
+                    // Continuar con el registro aunque falle la ubicación
+                    registrarCamaraConUbicacion(client, camaraJson, camaraIdConsumer, logger, csrfToken);
+                }
+            }, logger);
+            
+        } catch (Exception e) {
+            logger.accept("Error inesperado al registrar cámara: " + e.getMessage());
+            if (camaraIdConsumer != null) camaraIdConsumer.accept(null);
+        }
+    }
+    
+    /**
+     * Obtiene la ubicación actual del sistema usando un servicio web externo
+     * @param callback Se llama con la ubicación obtenida (o null si falla)
+     * @param logger Logger para mensajes de depuración
+     */
+    private void obtenerUbicacion(Consumer<JSONObject> callback, Consumer<String> logger) {
+        try {
+            HttpClient httpClient = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://ip-api.com/json/"))
+                .timeout(Duration.ofSeconds(5))
+                .build();
+            
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenAccept(response -> {
+                    if (response.statusCode() == 200) {
+                        try {
+                            JSONObject locationData = new JSONObject(response.body());
+                            if ("success".equals(locationData.optString("status"))) {
+                                double lat = locationData.getDouble("lat");
+                                double lon = locationData.getDouble("lon");
+                                String city = locationData.optString("city", "");
+                                String country = locationData.optString("country", "");
+                                String region = locationData.optString("regionName", "");
+                                
+                                // Construir una dirección legible
+                                StringBuilder direccion = new StringBuilder();
+                                if (!city.isEmpty()) direccion.append(city).append(", ");
+                                if (!region.isEmpty() && !region.equals(city)) direccion.append(region).append(", ");
+                                if (!country.isEmpty()) direccion.append(country);
+                                
+                                // Crear el objeto de ubicación
+                                JSONObject ubicacion = new JSONObject();
+                                ubicacion.put("latitud", lat);
+                                ubicacion.put("longitud", lon);
+                                ubicacion.put("direccion", direccion.toString().replaceAll(", $", ""));
+                                
+                                logger.accept(String.format("Ubicación obtenida: %f, %f - %s", 
+                                    lat, lon, direccion));
+                                
+                                callback.accept(ubicacion);
+                                return;
+                            } else {
+                                logger.accept("No se pudo obtener la ubicación: " + 
+                                    locationData.optString("message", "Error desconocido"));
+                            }
+                        } catch (Exception e) {
+                            logger.accept("Error al procesar la ubicación: " + e.getMessage());
+                        }
+                    } else {
+                        logger.accept("Error al obtener la ubicación: HTTP " + response.statusCode());
+                    }
+                    // Si llegamos aquí, hubo un error
+                    callback.accept(null);
+                })
+                .exceptionally(e -> {
+                    logger.accept("Excepción al obtener la ubicación: " + e.getMessage());
+                    callback.accept(null);
+                    return null;
+                });
+            
+            logger.accept("Solicitando ubicación...");
+            
+        } catch (Exception e) {
+            logger.accept("Error al intentar obtener la ubicación: " + e.getMessage());
+            callback.accept(null);
+        }
+    }
+    
+    /**
+     * Registra la cámara en el servidor con la ubicación obtenida (si la hay)
+     */
+    private void registrarCamaraConUbicacion(HttpClient client, JSONObject camaraJson, 
+                                            Consumer<Long> camaraIdConsumer, 
+                                            Consumer<String> logger, String csrfToken) {
+        try {
             logger.accept("Enviando solicitud de registro de cámara...");
             logger.accept("URL: " + servidorUrl + "/api/camaras");
             logger.accept("Cuerpo: " + camaraJson.toString());

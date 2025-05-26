@@ -86,8 +86,18 @@ public class ServidorUI extends JFrame {
         panelCamaras.setBorder(BorderFactory.createTitledBorder("Cámaras del Equipo"));
         
         modeloTablaCamaras = new DefaultTableModel(
-            new Object[]{"ID", "Nombre", "IP", "Estado"}, 0
-        );
+            new Object[]{"ID", "Nombre", "IP", "Estado", "Latitud", "Longitud", "Dirección"}, 0
+        ) {
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) {
+                    return Long.class; // ID
+                } else if (columnIndex == 4 || columnIndex == 5) {
+                    return Double.class; // Latitud y Longitud
+                }
+                return String.class; // Nombre, IP, Estado, Dirección
+            }
+        };
         tablaCamaras = new JTable(modeloTablaCamaras);
         panelCamaras.add(new JScrollPane(tablaCamaras), BorderLayout.CENTER);
         
@@ -776,11 +786,20 @@ public class ServidorUI extends JFrame {
             // Obtener la IP de la cámara
             String ip = camara.optString("ip", "Desconocida");
             
+            // Obtener la ubicación de la cámara (ahora los campos están aplanados en el objeto camara)
+            Double latitud = camara.has("latitud") && !camara.isNull("latitud") ? camara.getDouble("latitud") : null;
+            Double longitud = camara.has("longitud") && !camara.isNull("longitud") ? camara.getDouble("longitud") : null;
+            String direccion = camara.optString("direccion", "");
+            
+            // Usar valores vacíos para latitud y longitud cuando sean nulos
             modeloTablaCamaras.addRow(new Object[]{
                 camara.getLong("idCamara"),
                 camara.optString("nombre", "Sin nombre"),
                 ip,
-                estado
+                estado,
+                latitud != null ? latitud : "",
+                longitud != null ? longitud : "",
+                direccion != null ? direccion : ""
             });
         }
         

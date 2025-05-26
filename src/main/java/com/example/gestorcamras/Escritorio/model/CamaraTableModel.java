@@ -6,7 +6,7 @@ import org.json.JSONObject;
 
 public class CamaraTableModel extends AbstractTableModel {
     private JSONArray camaras;
-    private final String[] columnNames = {"ID", "Nombre", "IP", "Tipo", "Activa"};
+    private final String[] columnNames = {"ID", "Nombre", "IP", "Tipo", "Activa", "Latitud", "Longitud", "Dirección"};
 
     public CamaraTableModel() {
         this.camaras = new JSONArray();
@@ -42,20 +42,27 @@ public class CamaraTableModel extends AbstractTableModel {
                 case 2: return camara.optString("ip", "");
                 case 3: return camara.optString("tipo", "");
                 case 4: return camara.optBoolean("activa", false) ? "Sí" : "No";
+                case 5: return camara.has("latitud") ? camara.optDouble("latitud", 0.0) : "";
+                case 6: return camara.has("longitud") ? camara.optDouble("longitud", 0.0) : "";
+                case 7: return camara.optString("direccion", "");
                 default: return "";
             }
         } catch (Exception e) {
+            e.printStackTrace();
             return "";
         }
     }
 
     @Override
     public Class<?> getColumnClass(int columnIndex) {
-        if (columnIndex == 4) {
-            return String.class;
-        } else if (columnIndex == 0) {
-            return Integer.class;
+        if (columnIndex == 0) {
+            return Integer.class; // ID
+        } else if (columnIndex == 4) {
+            return String.class; // Activa (Sí/No)
+        } else if (columnIndex == 5 || columnIndex == 6) {
+            // Para latitud y longitud, devolvemos Object.class para manejar tanto Double como String vacío
+            return Object.class;
         }
-        return String.class;
+        return String.class; // Nombre, IP, Tipo, Dirección
     }
 }

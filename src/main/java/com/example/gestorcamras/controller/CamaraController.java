@@ -48,6 +48,17 @@ public class CamaraController {
                 camaraDTO.setFechaRegistro(LocalDateTime.now());
             }
             
+            // Si se proporcionan coordenadas pero no hay ID de ubicación, intentar obtener la dirección
+            if ((camaraDTO.getLatitud() != null && camaraDTO.getLongitud() != null) && 
+                (camaraDTO.getUbicacionId() == null || camaraDTO.getDireccion() == null)) {
+                
+                // Si no hay dirección, el servicio de geocodificación la obtendrá de forma asíncrona
+                if (camaraDTO.getDireccion() == null) {
+                    // El servicio de geocodificación se encargará de obtener la dirección
+                    // después de guardar la cámara
+                }
+            }
+            
             // Validar campos requeridos
             if (camaraDTO.getNombre() == null || camaraDTO.getNombre().trim().isEmpty()) {
                 return ResponseEntity.badRequest().body(null);

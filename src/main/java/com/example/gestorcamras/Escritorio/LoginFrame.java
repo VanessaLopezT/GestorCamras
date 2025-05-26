@@ -1,5 +1,6 @@
 package com.example.gestorcamras.Escritorio;
 
+
 import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -104,7 +105,7 @@ public class LoginFrame extends JFrame {
             serverIp = localIp;
             System.out.println("IP local detectada: " + serverIp);
         }
-        setTitle("Login - Solo Operadores");
+        setTitle("Login - Gestor de Cámaras");
         setSize(350, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -320,8 +321,15 @@ public class LoginFrame extends JFrame {
                                     dispose();
                                 });
                                 return; // Salir del método después de iniciar sesión exitosamente
+                            } else if (nombreRol.equalsIgnoreCase("VISUALIZADOR")) {
+                                SwingUtilities.invokeLater(() -> {
+                                    VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie);
+                                    visualizador.setVisible(true);
+                                    dispose();
+                                });
+                                return; // Salir del método después de iniciar sesión exitosamente
                             } else {
-                                lbEstado.setText("No autorizado: usuario no es OPERADOR. Rol actual: " + nombreRol);
+                                lbEstado.setText("No autorizado: El rol " + nombreRol + " no tiene acceso a esta aplicación.");
                             }
                         } else {
                             lbEstado.setText("Error al obtener información del usuario. Código: " + responseCode);
