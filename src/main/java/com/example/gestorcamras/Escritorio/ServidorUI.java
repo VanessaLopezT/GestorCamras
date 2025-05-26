@@ -1,5 +1,6 @@
 package com.example.gestorcamras.Escritorio;
 
+import com.example.gestorcamras.Escritorio.VisualizadorMultimediaUI;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -124,9 +125,31 @@ public class ServidorUI extends JFrame {
         
         // Panel de botones
         JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
+        // Botón para actualizar la lista de equipos
         JButton btnActualizar = new JButton("Actualizar");
         btnActualizar.addActionListener(e -> cargarEquipos());
         panelBoton.add(btnActualizar);
+        
+        // Botón para ver archivos recibidos
+        JButton btnVerArchivos = new JButton("Ver Archivos Recibidos");
+        btnVerArchivos.addActionListener(e -> {
+            // Abrir la ventana de visualización de archivos
+            SwingUtilities.invokeLater(() -> {
+                try {
+                    VisualizadorMultimediaUI visualizador = new VisualizadorMultimediaUI();
+                    visualizador.setLocationRelativeTo(this);
+                    visualizador.setVisible(true);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Error al abrir el visualizador de archivos: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                    ex.printStackTrace();
+                }
+            });
+        });
+        panelBoton.add(btnVerArchivos);
+        
         panelSuperior.add(panelBoton, BorderLayout.EAST);
         
         add(panelSuperior, BorderLayout.NORTH);

@@ -62,18 +62,26 @@ public class SecurityConfig {
             "/api/equipos/registrar",
             "/api/equipos/ip/**",
             "/api/equipos/*/camaras",
-            "/api/camaras/equipo/*"
+            "/api/camaras/equipo/*",
+            "/api/equipos/*/archivos",
+            "/api/camaras/*/archivos",
+            "/api/archivos/**",
+            "/archivos_multimedia/**"
         };
 
         return http
                 // Deshabilitar CSRF para endpoints específicos
                 .csrf(csrf -> csrf
-                    .ignoringRequestMatchers("/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", "/app/**", "/user/queue/**", "/sockjs/**")
-                    .ignoringRequestMatchers("/api/equipos", "/api/equipos/**")
+                    .ignoringRequestMatchers(
+                        "/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", 
+                        "/app/**", "/user/queue/**", "/sockjs/**"
+                    )
+                    .ignoringRequestMatchers(
+                        "/api/equipos", "/api/equipos/**",
+                        "/api/camaras", "/api/camaras/**",
+                        "/api/archivos/**"
+                    )
                     .ignoringRequestMatchers("/login")
-                    .ignoringRequestMatchers("/api/camaras", "/api/camaras/**")
-                    .ignoringRequestMatchers("/api/equipos/registrar")
-                    .ignoringRequestMatchers("/api/equipos/ip/**")
                 )
                 // Habilitar CORS para todos los orígenes
                 .cors(cors -> cors.configurationSource(request -> {
