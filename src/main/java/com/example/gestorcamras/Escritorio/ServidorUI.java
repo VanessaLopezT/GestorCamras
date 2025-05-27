@@ -41,6 +41,9 @@ public class ServidorUI extends JFrame {
     private DefaultTableModel modeloTablaCamaras;
     private JTextArea areaLogs;
     private JLabel lblEstadoServidor;
+    private JPanel panelPrincipal;
+    private JTabbedPane tabbedPane;
+    private MapaCamarasPanel mapaPanel;
 
     public ServidorUI() {
         if (!isServerInstance) {
@@ -67,79 +70,116 @@ public class ServidorUI extends JFrame {
     }
 
     private void inicializarComponentes() {
-        // Panel principal
-        JPanel panelPrincipal = new JPanel(new BorderLayout());
+        // Panel principal con pestañas
+        panelPrincipal = new JPanel(new BorderLayout());
+        tabbedPane = new JTabbedPane();
+        panelPrincipal.add(tabbedPane, BorderLayout.CENTER);
         
-        // Panel de lista de equipos
-        JPanel panelEquipos = new JPanel(new BorderLayout());
-        panelEquipos.setBorder(BorderFactory.createTitledBorder("Equipos Conectados"));
-        panelEquipos.setPreferredSize(new Dimension(300, 0));
+        // Panel de lista de equipos a la izquierda
+        JPanel panelIzquierdo = new JPanel(new BorderLayout());
+        panelIzquierdo.setPreferredSize(new Dimension(300, getHeight()));
         
+        // Panel de la lista de equipos
+        JPanel panelListaEquipos = new JPanel(new BorderLayout());
+        panelListaEquipos.setBorder(BorderFactory.createTitledBorder("Equipos"));
         modeloListaEquipos = new DefaultListModel<>();
         listaEquipos = new JList<>(modeloListaEquipos);
         listaEquipos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         listaEquipos.addListSelectionListener(this::seleccionarEquipo);
-        panelEquipos.add(new JScrollPane(listaEquipos), BorderLayout.CENTER);
         
-        // Panel de cámaras
+        // Botón para actualizar la lista de equipos
+        JButton btnActualizar = new JButton("Actualizar");
+        btnActualizar.addActionListener(e -> cargarEquipos());
+        
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        panelBotones.add(btnActualizar);
+        
+        panelListaEquipos.add(panelBotones, BorderLayout.NORTH);
+        panelListaEquipos.add(new JScrollPane(listaEquipos), BorderLayout.CENTER);
+        
+        panelIzquierdo.add(panelListaEquipos, BorderLayout.CENTER);
+        
+        // Pestaña de cámaras
         JPanel panelCamaras = new JPanel(new BorderLayout());
-        panelCamaras.setBorder(BorderFactory.createTitledBorder("Cámaras del Equipo"));
         
-        modeloTablaCamaras = new DefaultTableModel(
-            new Object[]{"ID", "Nombre", "IP", "Estado", "Latitud", "Longitud", "Dirección"}, 0
-        ) {
+        // Tabla de cámaras
+        modeloTablaCamaras = new DefaultTableModel(new Object[]{"ID", "Nombre", "IP", "Estado", "Latitud", "Longitud", "Dirección"}, 0) {
             @Override
-            public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0) {
-                    return Long.class; // ID
-                } else if (columnIndex == 4 || columnIndex == 5) {
-                    return Double.class; // Latitud y Longitud
-                }
-                return String.class; // Nombre, IP, Estado, Dirección
+            public boolean isCellEditable(int row, int column) {
+                return false;
             }
         };
+        
         tablaCamaras = new JTable(modeloTablaCamaras);
-        panelCamaras.add(new JScrollPane(tablaCamaras), BorderLayout.CENTER);
+        tablaCamaras.setAutoCreateRowSorter(true);
+        
+        // Hacer que las filas tengan un tamaño fijo
+        tablaCamaras.setRowHeight(25);
+        
+        // Ajustar el ancho de las columnas
+        tablaCamaras.getColumnModel().getColumn(0).setPreferredWidth(50);  // ID
+        tablaCamaras.getColumnModel().getColumn(1).setPreferredWidth(150); // Nombre
+        tablaCamaras.getColumnModel().getColumn(2).setPreferredWidth(120); // IP
+        tablaCamaras.getColumnModel().getColumn(3).setPreferredWidth(80);  // Estado
+        tablaCamaras.getColumnModel().getColumn(4).setPreferredWidth(100); // Latitud
+        tablaCamaras.getColumnModel().getColumn(5).setPreferredWidth(100); // Longitud
+        tablaCamaras.getColumnModel().getColumn(6).setPreferredWidth(200); // Dirección
+        
+        JScrollPane scrollTabla = new JScrollPane(tablaCamaras);
+        panelCamaras.add(scrollTabla, BorderLayout.CENTER);
         
         // Panel de logs
         JPanel panelLogs = new JPanel(new BorderLayout());
         panelLogs.setBorder(BorderFactory.createTitledBorder("Registros"));
-        panelLogs.setPreferredSize(new Dimension(0, 150));
-        
         areaLogs = new JTextArea();
         areaLogs.setEditable(false);
         panelLogs.add(new JScrollPane(areaLogs), BorderLayout.CENTER);
         
-        // Organizar paneles
-        JSplitPane splitPanePrincipal = new JSplitPane(
-            JSplitPane.HORIZONTAL_SPLIT,
-            panelEquipos,
-            panelCamaras
-        );
-        splitPanePrincipal.setResizeWeight(0.3);
+        // Panel inferior con logs
+        JPanel panelInferior = new JPanel(new BorderLayout());
+        panelInferior.setPreferredSize(new Dimension(getWidth(), 150));
+        panelInferior.add(panelLogs, BorderLayout.CENTER);
         
-        panelPrincipal.add(splitPanePrincipal, BorderLayout.CENTER);
-        panelPrincipal.add(panelLogs, BorderLayout.SOUTH);
+        // Panel principal de la pestaña de cámaras
+        JPanel panelCamarasPrincipal = new JPanel(new BorderLayout());
+        panelCamarasPrincipal.add(panelCamaras, BorderLayout.CENTER);
+        panelCamarasPrincipal.add(panelInferior, BorderLayout.SOUTH);
         
-        add(panelPrincipal, BorderLayout.CENTER);
+        // Añadir pestañas
+        tabbedPane.addTab("Cámaras", panelCamarasPrincipal);
+        
+        // Inicializar el panel del mapa (inicialmente vacío)
+        mapaPanel = new MapaCamarasPanel(new JSONArray());
+        tabbedPane.addTab("Mapa", new JScrollPane(mapaPanel));
+        
+        // Configurar el diseño principal
+        JPanel panelContenido = new JPanel(new BorderLayout());
+        panelContenido.add(panelIzquierdo, BorderLayout.WEST);
+        panelContenido.add(tabbedPane, BorderLayout.CENTER);
+        
+        panelPrincipal.add(panelContenido, BorderLayout.CENTER);
+        
+        // Barra de estado
+        JPanel panelEstado = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        lblEstadoServidor = new JLabel("Estado: Desconectado");
+        panelEstado.add(lblEstadoServidor);
+        panelPrincipal.add(panelEstado, BorderLayout.SOUTH);
+        
+        add(panelPrincipal);
         
         // Panel superior con información del servidor y botones
         JPanel panelSuperior = new JPanel(new BorderLayout());
         
         // Panel de estado del servidor
-        JPanel panelEstado = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel panelEstado2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
         lblEstadoServidor = new JLabel("Obteniendo dirección IP...");
-        panelEstado.add(new JLabel("Servidor: "));
-        panelEstado.add(lblEstadoServidor);
-        panelSuperior.add(panelEstado, BorderLayout.WEST);
+        panelEstado2.add(new JLabel("Servidor: "));
+        panelEstado2.add(lblEstadoServidor);
+        panelSuperior.add(panelEstado2, BorderLayout.WEST);
         
         // Panel de botones
         JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         
-        // Botón para actualizar la lista de equipos
-        JButton btnActualizar = new JButton("Actualizar");
-        btnActualizar.addActionListener(e -> cargarEquipos());
-        panelBoton.add(btnActualizar);
         
         // Botón para ver archivos recibidos
         JButton btnVerArchivos = new JButton("Ver Archivos Recibidos");
@@ -775,6 +815,9 @@ public class ServidorUI extends JFrame {
         // Limpiar la tabla actual
         modeloTablaCamaras.setRowCount(0);
         
+        // Crear un nuevo array para almacenar las cámaras con ubicación
+        JSONArray camarasConUbicacion = new JSONArray();
+        
         // Agregar las cámaras a la tabla
         for (int i = 0; i < camaras.length(); i++) {
             JSONObject camara = camaras.getJSONObject(i);
@@ -786,10 +829,39 @@ public class ServidorUI extends JFrame {
             // Obtener la IP de la cámara
             String ip = camara.optString("ip", "Desconocida");
             
-            // Obtener la ubicación de la cámara (ahora los campos están aplanados en el objeto camara)
-            Double latitud = camara.has("latitud") && !camara.isNull("latitud") ? camara.getDouble("latitud") : null;
-            Double longitud = camara.has("longitud") && !camara.isNull("longitud") ? camara.getDouble("longitud") : null;
+            // Obtener la ubicación de la cámara
+            Double latitud = null;
+            Double longitud = null;
+            
+            try {
+                if (camara.has("latitud") && !camara.isNull("latitud")) {
+                    latitud = camara.getDouble("latitud");
+                }
+                if (camara.has("longitud") && !camara.isNull("longitud")) {
+                    longitud = camara.getDouble("longitud");
+                }
+            } catch (Exception e) {
+                log("Error al obtener coordenadas de la cámara: " + e.getMessage());
+            }
+            
             String direccion = camara.optString("direccion", "");
+            String tipo = camara.optString("tipo", "");
+            
+            // Si la cámara tiene ubicación, la añadimos al array para el mapa
+            if (latitud != null && longitud != null) {
+                JSONObject camaraConUbicacion = new JSONObject();
+                camaraConUbicacion.put("idCamara", camara.getLong("idCamara"));
+                camaraConUbicacion.put("nombre", camara.optString("nombre", "Sin nombre"));
+                camaraConUbicacion.put("ip", ip);
+                camaraConUbicacion.put("activa", activa);
+                camaraConUbicacion.put("latitud", latitud);
+                camaraConUbicacion.put("longitud", longitud);
+                camaraConUbicacion.put("direccion", direccion);
+                camaraConUbicacion.put("tipo", tipo);
+                camarasConUbicacion.put(camaraConUbicacion);
+                
+                log("Cámara con ubicación: " + camaraConUbicacion.toString());
+            }
             
             // Usar valores vacíos para latitud y longitud cuando sean nulos
             modeloTablaCamaras.addRow(new Object[]{
@@ -799,8 +871,16 @@ public class ServidorUI extends JFrame {
                 estado,
                 latitud != null ? latitud : "",
                 longitud != null ? longitud : "",
-                direccion != null ? direccion : ""
+                direccion
             });
+        }
+        
+        // Actualizar el mapa con las cámaras que tienen ubicación
+        if (mapaPanel != null) {
+            log("Actualizando mapa con " + camarasConUbicacion.length() + " cámaras con ubicación");
+            mapaPanel.actualizarCamaras(camarasConUbicacion);
+        } else {
+            log("Error: mapaPanel es nulo");
         }
         
         log("Tabla de cámaras actualizada con " + camaras.length() + " cámaras");
