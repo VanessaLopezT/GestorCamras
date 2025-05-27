@@ -255,8 +255,8 @@ public class GestorCamrasApplication {
                     System.setProperty("gestorcamras.server.host", host);
                     System.setProperty("gestorcamras.server.port", String.valueOf(port));
                     
-                    // Iniciar el login
-                    LoginFrame loginFrame = new LoginFrame();
+                    // Iniciar el login con la IP ya configurada
+                    LoginFrame loginFrame = new LoginFrame(serverUrl);
                     loginFrame.setVisible(true);
                     System.out.println("Interfaz de cliente iniciada");
                     

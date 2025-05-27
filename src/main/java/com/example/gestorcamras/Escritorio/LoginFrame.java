@@ -1,24 +1,18 @@
 package com.example.gestorcamras.Escritorio;
 
-
 import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Enumeration;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -33,77 +27,25 @@ public class LoginFrame extends JFrame {
     private JLabel lbEstado;
     
     // Constantes para la configuración
-    private static final int DEFAULT_PORT = 8080;
-    private String serverIp = "127.0.0.1"; // Valor por defecto
 
-    /**
-     * Obtiene la dirección IP local de la máquina
-     * @return La dirección IP local o null si no se pudo determinar
-     */
-    private String getLocalIpAddress() {
-        try {
-            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-            while (interfaces.hasMoreElements()) {
-                NetworkInterface iface = interfaces.nextElement();
-                // Ignorar interfaces que no estén activas o sean loopback
-                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || iface.isPointToPoint()) {
-                    continue;
-                }
+    private String serverUrl;
 
-                Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress addr = addresses.nextElement();
-                    // Solo direcciones IPv4
-                    if (addr.isLoopbackAddress() || !(addr.getHostAddress().contains("."))) {
-                        continue;
-                    }
-                    
-                    String hostAddress = addr.getHostAddress();
-                    // Verificar que sea una dirección IP privada
-                    if (hostAddress.startsWith("192.168.") || 
-                        hostAddress.startsWith("10.") || 
-                        hostAddress.startsWith("172.16.")) {
-                        return hostAddress;
-                    }
-                }
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+
     
-    /**
-     * Muestra un diálogo para que el usuario confirme o modifique la IP del servidor
-     * @param defaultIp La IP por defecto a mostrar
-     * @return La IP ingresada por el usuario o null si se canceló
-     */
-    private String showServerIpDialog(String defaultIp) {
-        String ip = (String) JOptionPane.showInputDialog(
-            null,
-            "Ingrese la dirección IP del servidor:",
-            "Configuración de conexión",
-            JOptionPane.QUESTION_MESSAGE,
-            null,
-            null,
-            defaultIp
-        );
+
+    
+    public LoginFrame(String serverUrl) {
+        this.serverUrl = serverUrl;
+        System.out.println("URL del servidor: " + serverUrl);
         
-        if (ip != null) {
-            ip = ip.trim();
-            if (ip.isEmpty()) {
-                ip = defaultIp;
-            }
-        }
-        return ip;
-    }
-    
-    public LoginFrame() {
-        // Obtener la IP local al iniciar
-        String localIp = getLocalIpAddress();
-        if (localIp != null) {
-            serverIp = localIp;
-            System.out.println("IP local detectada: " + serverIp);
+        // Extraer la IP de la URL
+        try {
+            URI uri = new URI(serverUrl);
+            String host = uri.getHost();
+            int port = uri.getPort();
+            System.out.println("Conectando al servidor en " + host + ":" + port);
+        } catch (Exception e) {
+            System.err.println("Error al analizar la URL del servidor: " + e.getMessage());
         }
         setTitle("Login - Gestor de Cámaras");
         setSize(350, 200);
@@ -209,7 +151,6 @@ public class LoginFrame extends JFrame {
                 
             } catch (Exception ex) {
                 lbEstado.setText("Error al configurar credenciales: " + ex.getMessage());
-                ex.printStackTrace();
             }
         });
     }
@@ -218,25 +159,14 @@ public class LoginFrame extends JFrame {
         String usuario = tfUsuario.getText().trim();
         String password = new String(pfClave.getPassword());
         
-        // Mostrar diálogo para confirmar o modificar la IP del servidor
-        String confirmedIp = showServerIpDialog(serverIp);
-        if (confirmedIp == null) {
-            // Usuario canceló la operación
-            return;
-        }
-        
-        // Actualizar la IP del servidor
-        serverIp = confirmedIp;
-        String servidorUrl = "http://" + serverIp + ":" + DEFAULT_PORT;
-        
         System.out.println("=== INICIO DE SESIÓN ===");
-        System.out.println("URL del servidor: " + servidorUrl);
+        System.out.println("URL del servidor: " + serverUrl);
         System.out.println("Usuario: " + usuario);
         
         try {
             // Validar que la URL del servidor sea accesible
-            if (!isServerReachable(servidorUrl)) {
-                String errorMsg = "No se puede conectar al servidor en " + servidorUrl;
+            if (!isServerReachable(serverUrl)) {
+                String errorMsg = "No se puede conectar al servidor en " + serverUrl;
                 System.err.println(errorMsg);
                 lbEstado.setText(errorMsg);
                 return;
@@ -258,13 +188,14 @@ public class LoginFrame extends JFrame {
             HttpClient client = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)  // Seguir redirecciones HTTP normales
                 .build();
                 
             String params = "username=" + URLEncoder.encode(usuario, "UTF-8") + "&password=" + URLEncoder.encode(password, "UTF-8");
             System.out.println("Parámetros de login: " + params.replace(password, "*****"));
             
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(servidorUrl + "/login"))
+                    .uri(URI.create(serverUrl + "/login"))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Accept", "*/*")
                     .timeout(Duration.ofSeconds(10))
@@ -280,8 +211,13 @@ public class LoginFrame extends JFrame {
             
             System.out.println("Código de respuesta del login: " + code);
             
-            // Verificar si hay redirección
-            if (code == 302 || code == 200) {
+            // Verificar si la respuesta es exitosa o de redirección
+            if (code == 200 || code == 302) {
+                // Si es una redirección, obtener la nueva ubicación
+                if (code == 302) {
+                    String newLocation = response.headers().firstValue("Location").orElse("");
+                    System.out.println("Redirigiendo a: " + newLocation);
+                }
                 // Obtener la cookie de sesión
                 String headerCookies = response.headers().firstValue("Set-Cookie").orElse(null);
                 if (headerCookies != null) {
@@ -296,7 +232,7 @@ public class LoginFrame extends JFrame {
                     // Verificar rol del usuario
                     try {
                         HttpRequest requestUser = HttpRequest.newBuilder()
-                                .uri(URI.create(servidorUrl + "/api/usuario/actual"))
+                                .uri(URI.create(serverUrl + "/api/usuario/actual"))
                                 .header("Cookie", sessionCookie)
                                 .GET()
                                 .build();
