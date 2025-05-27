@@ -404,11 +404,58 @@ public class ClienteSwingUI extends JFrame {
      * Abre la ventana de la cámara para tomar fotos o grabar videos.
      */
     private void abrirCamara() {
+        // Verificar que haya un equipo registrado y cámaras disponibles
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            log("Error: No hay un equipo registrado. Carga las cámaras primero.");
+            JOptionPane.showMessageDialog(this, 
+                "No hay un equipo registrado. Por favor, carga las cámaras primero.",
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        int filaSeleccionada = tablaCamaras.getSelectedRow();
+        if (filaSeleccionada == -1) {
+            log("Error: Debes seleccionar una cámara de la tabla.");
+            JOptionPane.showMessageDialog(this, 
+                "Por favor, selecciona una cámara de la tabla antes de abrir la cámara.",
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Obtener el nombre de la cámara seleccionada
+        final String nombreCamara = (String) modeloCamarasTabla.getValueAt(filaSeleccionada, 1);
+        
         // Ejecutar en el hilo de eventos de Swing
         SwingUtilities.invokeLater(() -> {
             try {
                 // Crear y mostrar la ventana de la cámara
-                CamaraFrame frameCamara = new CamaraFrame();
+                CamaraFrame frameCamara = new CamaraFrame(rutaArchivo -> {
+                    // Este callback se ejecutará cuando se guarde una foto o video
+                    log("Archivo guardado: " + rutaArchivo);
+                    
+                    // Determinar el tipo de archivo (foto o video)
+                    String tipo = rutaArchivo.toLowerCase().endsWith(".mp4") || 
+                                 rutaArchivo.toLowerCase().endsWith(".avi") ? "VIDEO" : "FOTO";
+                    
+                    // Crear un objeto File para el archivo
+                    File archivo = new File(rutaArchivo);
+                    
+                    // Mostrar confirmación al usuario
+                    int opcion = JOptionPane.showConfirmDialog(this,
+                        String.format("¿Deseas enviar el %s '%s' al servidor?", 
+                                     tipo.toLowerCase(), 
+                                     archivo.getName()),
+                        "Archivo guardado",
+                        JOptionPane.YES_NO_OPTION);
+                    
+                    if (opcion == JOptionPane.YES_OPTION) {
+                        // Enviar el archivo al servidor
+                        enviarArchivo(tipo, archivo, nombreCamara);
+                    }
+                });
+                
                 frameCamara.setLocationRelativeTo(this); // Centrar respecto a la ventana principal
                 frameCamara.setVisible(true);
                 
@@ -429,5 +476,28 @@ public class ClienteSwingUI extends JFrame {
                     JOptionPane.ERROR_MESSAGE);
             }
         });
+    }
+    
+    /**
+     * Envía un archivo al servidor.
+     * @param tipo Tipo de archivo ("FOTO" o "VIDEO")
+     * @param archivo Archivo a enviar
+     * @param nombreCamara Nombre de la cámara que capturó el archivo
+     */
+    private void enviarArchivo(String tipo, File archivo, String nombreCamara) {
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            log("Error: No hay un equipo registrado. No se puede enviar el archivo.");
+            return;
+        }
+        
+        if (archivo == null || !archivo.exists()) {
+            log("Error: El archivo no existe o no se puede acceder a él.");
+            return;
+        }
+        
+        log(String.format("Enviando %s al servidor: %s", tipo.toLowerCase(), archivo.getAbsolutePath()));
+        
+        // Usar el controlador para enviar el archivo
+        controller.enviarArchivo(equipoIdGenerado, nombreCamara, archivo, tipo);
     }
 }

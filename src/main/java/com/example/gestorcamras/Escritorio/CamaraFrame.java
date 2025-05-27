@@ -5,6 +5,7 @@ import java.awt.*;
 
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.util.function.Consumer;
 
 /**
  * Interfaz de usuario para la cámara web.
@@ -17,8 +18,16 @@ public class CamaraFrame extends JFrame {
     private JLabel etiquetaEstado;
     private Timer timerActualizacion;
     private boolean grabando = false;
+    private final Consumer<String> onArchivoGuardadoListener;
 
-    public CamaraFrame() {
+    /**
+     * Crea una nueva instancia de CamaraFrame.
+     * @param onArchivoGuardadoListener Callback que se ejecutará cuando se guarde un archivo (foto o video).
+     *                                 Recibe como parámetro la ruta del archivo guardado.
+     */
+    public CamaraFrame(Consumer<String> onArchivoGuardadoListener) {
+        this.onArchivoGuardadoListener = onArchivoGuardadoListener;
+        
         setTitle("Cámara Web");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setSize(800, 600);
@@ -87,8 +96,13 @@ public class CamaraFrame extends JFrame {
                 btnGrabarVideo.setEnabled(false);
             });
             
-            // Inicializar el manejador de la cámara
-            manejadorCamara = new ManejadorCamara(etiquetaVistaPrevia);
+            // Inicializar el manejador de la cámara con el listener de archivo guardado
+            manejadorCamara = new ManejadorCamara(etiquetaVistaPrevia, rutaArchivo -> {
+                // Notificar al listener de la ventana cuando se guarde un archivo
+                if (onArchivoGuardadoListener != null) {
+                    onArchivoGuardadoListener.accept(rutaArchivo);
+                }
+            });
             
             // Actualizar la interfaz
             SwingUtilities.invokeLater(() -> {
@@ -254,17 +268,20 @@ public class CamaraFrame extends JFrame {
     }
     
     public static void main(String[] args) {
-        // Configurar el look and feel del sistema
+        // Configurar el Look and Feel del sistema operativo
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             e.printStackTrace();
         }
         
-        // Ejecutar la interfaz en el hilo de eventos de Swing
+        // Ejecutar en el hilo de eventos de Swing
         SwingUtilities.invokeLater(() -> {
-            CamaraFrame frame = new CamaraFrame();
-            frame.setLocationRelativeTo(null); // Centrar en la pantalla
+            // Crear una instancia con un listener nulo para el método main
+            CamaraFrame frame = new CamaraFrame(rutaArchivo -> {
+                System.out.println("Archivo guardado: " + rutaArchivo);
+            });
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setVisible(true);
         });
     }

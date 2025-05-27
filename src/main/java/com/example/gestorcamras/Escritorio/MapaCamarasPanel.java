@@ -79,13 +79,21 @@ public class MapaCamarasPanel extends JPanel {
                     String tipo = camara.optString("tipo", "");
                     boolean activa = camara.optBoolean("activa", false);
                     
+                    // Obtener el ID de la cámara
+                    int id = -1;
+                    if (camara.has("idCamara") && !camara.isNull("idCamara")) {
+                        id = camara.getInt("idCamara");
+                    }
+                    
+                    // If no ID found, use index as fallback
+                    if (id == -1) {
+                        id = i + 1;
+                    }
+                    
                     // Create a custom waypoint with camera information
-                    CameraWaypoint waypoint = new CameraWaypoint(lat, lng, nombre, ip, direccion, tipo, activa);
+                    CameraWaypoint waypoint = new CameraWaypoint(id, lat, lng, nombre, ip, direccion, tipo, activa);
                     waypoints.add(waypoint);
                     
-                    System.out.println("Cámara añadida al mapa: " + nombre + " en " + lat + ", " + lng);
-                } else {
-                    System.out.println("Cámara sin ubicación: " + camara.optString("nombre", "Cámara " + (i + 1)));
                 }
             } catch (Exception e) {
                 System.err.println("Error al procesar cámara: " + e.getMessage());
@@ -95,7 +103,6 @@ public class MapaCamarasPanel extends JPanel {
         
         // Only proceed if we have cameras to show
         if (waypoints.isEmpty()) {
-            System.out.println("No hay cámaras con ubicación para mostrar");
             return;
         }
         
@@ -136,12 +143,12 @@ public class MapaCamarasPanel extends JPanel {
                     GeoPosition center = new GeoPosition(centerLat / count, centerLon / count);
                     mapViewer.setAddressLocation(center);
                     
-                    // Always use zoom level 7
-                    mapViewer.setZoom(7);
+                    // Always use zoom level 6
+                    mapViewer.setZoom(6);
                 }
             }
             
-            System.out.println("Vista ajustada para " + positions.size() + " cámaras");
+
         } catch (Exception e) {
             System.err.println("Error al ajustar la vista del mapa: " + e.getMessage());
         }
@@ -154,6 +161,7 @@ public class MapaCamarasPanel extends JPanel {
     
     // Inner class to represent a camera waypoint
     private static class CameraWaypoint extends DefaultWaypoint {
+        private final int id;
         private final String nombre;
         private final String ip;
         private final String direccion;
@@ -162,9 +170,10 @@ public class MapaCamarasPanel extends JPanel {
         private final Color color;
         private final GeoPosition position;
         
-        public CameraWaypoint(double lat, double lon, String nombre, String ip, 
+        public CameraWaypoint(int id, double lat, double lon, String nombre, String ip, 
                             String direccion, String tipo, boolean activa) {
             super(lat, lon);
+            this.id = id;
             this.position = new GeoPosition(lat, lon);
             this.nombre = nombre != null ? nombre : "";
             this.ip = ip != null ? ip : "";
@@ -181,7 +190,7 @@ public class MapaCamarasPanel extends JPanel {
         
         public String getTooltipText() {
             StringBuilder sb = new StringBuilder("<html>");
-            sb.append("<b>").append(htmlEscape(nombre)).append("</b>");
+            sb.append("<b>ID: ").append(id).append(" - ").append(htmlEscape(nombre)).append("</b>");
             if (!ip.isEmpty()) {
                 sb.append("<br>IP: ").append(htmlEscape(ip));
             }
@@ -228,7 +237,7 @@ public class MapaCamarasPanel extends JPanel {
             cameraIcon = createCameraIcon(new Color(0, 128, 0)); // Green for active cameras
             cameraIconInactive = createCameraIcon(new Color(200, 0, 0)); // Red for inactive cameras
             
-            // Configure tooltip behavior
+            // Configure tooltip and hover behavior
             mapViewer.addMouseMotionListener(new MouseAdapter() {
                 @Override
                 public void mouseMoved(MouseEvent e) {
@@ -239,10 +248,20 @@ public class MapaCamarasPanel extends JPanel {
                         lastHoveredWaypoint = hovered;
                         if (hovered != null) {
                             mapViewer.setToolTipText(hovered.getTooltipText());
-                            mapViewer.repaint();
                         } else {
                             mapViewer.setToolTipText(null);
                         }
+                        // Force repaint to update the hover state
+                        mapViewer.repaint();
+                    }
+                }
+                
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    if (lastHoveredWaypoint != null) {
+                        lastHoveredWaypoint = null;
+                        mapViewer.setToolTipText(null);
+                        mapViewer.repaint();
                     }
                 }
             });
@@ -298,11 +317,22 @@ public class MapaCamarasPanel extends JPanel {
             double minDist = Double.MAX_VALUE;
             CameraWaypoint closest = null;
             
+            // Get the current viewport bounds
+            Rectangle viewportBounds = mapViewer.getViewportBounds();
+            
             for (CameraWaypoint waypoint : waypoints) {
+                // Convert geographic coordinates to pixels
                 Point2D waypointPoint = mapViewer.getTileFactory().geoToPixel(waypoint.getPosition(), mapViewer.getZoom());
-                double dist = waypointPoint.distance(point);
                 
-                if (dist < 20 && dist < minDist) { // 20 pixels tolerance
+                // Convert to view coordinates
+                double x = waypointPoint.getX() - viewportBounds.getX();
+                double y = waypointPoint.getY() - viewportBounds.getY();
+                
+                // Calculate distance from cursor to waypoint center
+                double dist = Math.hypot(point.getX() - x, point.getY() - (y - ICON_SIZE/2));
+                
+                // Check if cursor is within the icon bounds (with some padding)
+                if (dist < ICON_SIZE && dist < minDist) {
                     minDist = dist;
                     closest = waypoint;
                 }
@@ -343,58 +373,52 @@ public class MapaCamarasPanel extends JPanel {
                                ICON_SIZE, 
                                ICON_SIZE, 
                                null);
-                }
-                
-                // Show camera name on hover
-                if (waypoint == lastHoveredWaypoint) {
-                    // Configure text font
+                    
+                    // Always show camera ID below the icon with better visibility
                     Font originalFont = g.getFont();
                     Font boldFont = originalFont.deriveFont(Font.BOLD, 12);
                     g.setFont(boldFont);
-                    
-                    // Get text metrics
                     FontMetrics metrics = g.getFontMetrics();
-                    String displayText = waypoint.nombre;
                     
-                    // Calculate text position (above icon)
-                    int textX = x - (int)(metrics.stringWidth(displayText) / 2);
-                    int textY = y - ICON_SIZE - 5;
-                    
-                    // Calculate text bounds
-                    int textWidth = metrics.stringWidth(displayText);
-                    int textHeight = metrics.getAscent() + metrics.getDescent();
-                    
-                    // Draw semi-transparent background for better readability
-                    int padding = 6;
-                    int arc = 5;
-                    
-                    // Background
-                    g.setColor(new Color(255, 255, 255, 230));
-                    g.fillRoundRect(
-                        textX - padding, 
-                        textY - metrics.getAscent() - padding/2, 
-                        textWidth + 2*padding, 
-                        textHeight + padding,
-                        arc, arc
-                    );
-                    
-                    // Border
-                    g.setColor(new Color(0, 0, 0, 120));
-                    g.setStroke(new BasicStroke(1.5f));
-                    g.drawRoundRect(
-                        textX - padding, 
-                        textY - metrics.getAscent() - padding/2, 
-                        textWidth + 2*padding - 1, 
-                        textHeight + padding - 1,
-                        arc, arc
-                    );
-                    
-                    // Draw text with shadow for better readability
-                    g.setColor(Color.BLACK);
-                    g.drawString(displayText, textX, textY);
-                    
-                    // Restore original font
-                    g.setFont(originalFont);
+                    // Mostrar el ID solo cuando el mouse está sobre el ícono
+                    if (waypoint == lastHoveredWaypoint) {
+                        String idText = "ID: " + waypoint.id;
+                        FontMetrics fm = g.getFontMetrics();
+                        int idTextWidth = fm.stringWidth(idText);
+                        
+                        // Posición del texto (debajo del ícono)
+                        int idX = x - idTextWidth / 2;
+                        int idY = y + ICON_SIZE + 15;  // Espacio debajo del ícono
+                        
+                        // Fondo semitransparente para mejor legibilidad
+                        int idPadding = 4;
+                        int idArc = 4;
+                        
+                        // Dibujar fondo
+                        g.setColor(new Color(255, 255, 255, 220));
+                        g.fillRoundRect(
+                            idX - idPadding,
+                            idY - fm.getAscent() - idPadding/2,
+                            idTextWidth + 2*idPadding,
+                            fm.getHeight() + idPadding,
+                            idArc, idArc
+                        );
+                        
+                        // Borde
+                        g.setColor(new Color(0, 0, 0, 150));
+                        g.setStroke(new BasicStroke(1.0f));
+                        g.drawRoundRect(
+                            idX - idPadding,
+                            idY - fm.getAscent() - idPadding/2,
+                            idTextWidth + 2*idPadding,
+                            fm.getHeight() + idPadding,
+                            idArc, idArc
+                        );
+                        
+                        // Dibujar el texto del ID
+                        g.setColor(Color.BLACK);
+                        g.drawString(idText, idX, idY);
+                    }
                 }
             }
         }

@@ -8,10 +8,7 @@ import java.awt.*;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -21,14 +18,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class VisualizadorMultimediaUI extends JFrame {
-    // Método para registrar mensajes de depuración
-    private void log(String mensaje) {
-        System.out.println("[VisualizadorMultimediaUI] " + mensaje);
-    }
-    
     // Método para registrar mensajes en el hilo de Swing
     private void logEnSwing(String mensaje) {
-        SwingUtilities.invokeLater(() -> log(mensaje));
+        SwingUtilities.invokeLater(() -> System.out.println("[VisualizadorMultimediaUI] " + mensaje));
     }
     
     private Long obtenerIdCamaraSeleccionada() {
@@ -113,12 +105,15 @@ public class VisualizadorMultimediaUI extends JFrame {
         lblInfo = new JLabel(" ");
         lblInfo.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
         
-        // Panel de botones de acción
+        // Panel de botones de acción (ocultos pero con la lógica mantenida)
         JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         btnDescargar = new JButton("Descargar");
         btnEliminar = new JButton("Eliminar");
-        panelAcciones.add(btnDescargar);
-        panelAcciones.add(btnEliminar);
+        // Ocultar los botones pero mantener la lógica
+        btnDescargar.setVisible(false);
+        btnEliminar.setVisible(false);
+        // Mantener las referencias para posibles usos futuros
+        panelAcciones.setVisible(false); // Ocultar el panel de acciones
         
         // Agregar componentes al panel principal
         JPanel panelSuperior = new JPanel(new BorderLayout());
@@ -167,7 +162,7 @@ public class VisualizadorMultimediaUI extends JFrame {
             protected Void doInBackground() {
                 try {
                     String serverUrl = "http://localhost:8080/api/equipos";
-                    log("Realizando solicitud a: " + serverUrl);
+                    System.out.println("[VisualizadorMultimediaUI] Realizando solicitud a: " + serverUrl);
                     
                     // Crear cliente HTTP
                     java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
@@ -177,18 +172,18 @@ public class VisualizadorMultimediaUI extends JFrame {
                         .GET()
                         .build();
                     
-                    log("Enviando solicitud HTTP...");
+                    System.out.println("[VisualizadorMultimediaUI] Enviando solicitud HTTP...");
                     java.net.http.HttpResponse<String> response = client.send(
                         request, 
                         java.net.http.HttpResponse.BodyHandlers.ofString()
                     );
                     
                     int statusCode = response.statusCode();
-                    log("Código de respuesta: " + statusCode);
+                    System.out.println("[VisualizadorMultimediaUI] Código de respuesta: " + statusCode);
                     
                     if (statusCode == 200) {
                         String responseBody = response.body();
-                        log("Respuesta recibida: " + responseBody);
+                        System.out.println("[VisualizadorMultimediaUI] Respuesta recibida: " + responseBody);
                         
                         JSONArray equipos = new JSONArray(responseBody);
                         logEnSwing("Equipos recibidos: " + equipos.length());
@@ -197,8 +192,8 @@ public class VisualizadorMultimediaUI extends JFrame {
                         SwingUtilities.invokeLater(() -> actualizarListaEquipos(equipos));
                     } else {
                         String errorMessage = "Error al cargar equipos. Código: " + statusCode;
-                        log(errorMessage);
-                        log("Cuerpo de la respuesta: " + response.body());
+                        System.out.println("[VisualizadorMultimediaUI] " + errorMessage);
+                        System.out.println("[VisualizadorMultimediaUI] Cuerpo de la respuesta: " + response.body());
                         
                         // Mostrar el error en la interfaz
                         SwingUtilities.invokeLater(() -> 
@@ -207,7 +202,7 @@ public class VisualizadorMultimediaUI extends JFrame {
                     }
                 } catch (Exception e) {
                     String errorMsg = "Error al cargar equipos: " + e.getMessage();
-                    log(errorMsg);
+                    System.out.println("[VisualizadorMultimediaUI] " + errorMsg);
                     e.printStackTrace();
                     
                     // Mostrar el error en la interfaz
@@ -220,7 +215,7 @@ public class VisualizadorMultimediaUI extends JFrame {
             
             @Override
             protected void done() {
-                log("Finalizada la carga de equipos");
+                System.out.println("[VisualizadorMultimediaUI] Finalizada la carga de equipos");
             }
         };
         

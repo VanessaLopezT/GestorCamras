@@ -16,6 +16,8 @@ import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.Arrays;
 
 /**
  * Clase para manejar la cámara web y realizar capturas de fotos y videos.
@@ -36,17 +38,15 @@ public class ManejadorCamara {
     private long tiempoSobrante = 0; // Para manejar el tiempo sobrante entre frames
     private static final long MAX_TAMANO_VIDEO_MB = 100; // 100MB máximo por video
     private static final long MAX_TAMANO_FOTO_MB = 10;   // 10MB máximo por foto
+    private Consumer<String> onArchivoGuardadoListener;   // Listener para notificar cuando se guarda un archivo
 
     static {
         try {
             // Cargar la biblioteca desde la ruta de instalación
             String opencvPath = "C:\\opencv\\build\\java\\x64\\opencv_java455.dll";
             System.load(opencvPath);
-            System.out.println("OpenCV cargado desde: " + opencvPath);
             
-            // Verificar que OpenCV se cargó correctamente
-            System.out.println("Versión de OpenCV: " + Core.VERSION);
-            System.out.println("Ruta de la biblioteca: " + Core.NATIVE_LIBRARY_NAME);
+            // OpenCV cargado correctamente
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null,
@@ -65,7 +65,14 @@ public class ManejadorCamara {
      * Constructor de la clase ManejadorCamara.
      * @param etiquetaVistaPrevia JLabel donde se mostrará la vista previa de la cámara.
      */
-    public ManejadorCamara(JLabel etiquetaVistaPrevia) {
+    /**
+     * Constructor de la clase ManejadorCamara.
+     * @param etiquetaVistaPrevia JLabel donde se mostrará la vista previa de la cámara.
+     * @param onArchivoGuardadoListener Callback que se ejecutará cuando se guarde un archivo (foto o video).
+     *                                 Recibe como parámetro la ruta del archivo guardado.
+     */
+    public ManejadorCamara(JLabel etiquetaVistaPrevia, Consumer<String> onArchivoGuardadoListener) {
+        this.onArchivoGuardadoListener = onArchivoGuardadoListener;
         this.etiquetaVistaPrevia = etiquetaVistaPrevia;
         
         // Crear carpetas si no existen
@@ -121,13 +128,13 @@ public class ManejadorCamara {
         
         // Verificar la configuración
         double fpsConfigurado = captura.get(Videoio.CAP_PROP_FPS);
-        System.out.println("FPS configurados: " + fpsConfigurado);
+        // FPS configurados
         
         // Si no se pudo configurar a 30 FPS, intentar con un valor más bajo
         if (fpsConfigurado <= 0 || fpsConfigurado > 60) {
             captura.set(Videoio.CAP_PROP_FPS, 15);
             fpsConfigurado = captura.get(Videoio.CAP_PROP_FPS);
-            System.out.println("FPS reconfigurados a: " + fpsConfigurado);
+            // FPS reconfigurados
         }
         captura.set(Videoio.CAP_PROP_FPS, FPS_ESTANDAR);
         
@@ -270,6 +277,11 @@ public class ManejadorCamara {
                 }
                 return null;
             }
+            
+            // Notificar que se ha guardado un archivo
+            if (onArchivoGuardadoListener != null) {
+                onArchivoGuardadoListener.accept(archivoFoto.getAbsolutePath());
+            }
         } catch (IOException e) {
             mostrarError("Error al verificar el tamaño de la foto: " + e.getMessage());
             return null;
@@ -325,12 +337,7 @@ public class ManejadorCamara {
             grabadorInicializado = grabadorVideo.isOpened();
             
             if (grabadorInicializado) {
-                System.out.println("Grabador de video inicializado con códec: " + 
-                    String.format("%c%c%c%c", 
-                        (fourcc & 0xff), 
-                        (fourcc >> 8) & 0xff, 
-                        (fourcc >> 16) & 0xff, 
-                        (fourcc >> 24) & 0xff));
+                // Grabador de video inicializado
             }
         }
         
@@ -402,11 +409,15 @@ public class ManejadorCamara {
         
         if (archivos != null && archivos.length > 0) {
             // Ordenar por fecha de modificación (más reciente primero)
-            java.util.Arrays.sort(archivos, (f1, f2) -> 
-                Long.compare(f2.lastModified(), f1.lastModified())
-            );
+            Arrays.sort(archivos, (f1, f2) -> Long.compare(f2.lastModified(), f1.lastModified()));
+            String rutaVideo = archivos[0].getAbsolutePath();
             
-            return archivos[0].getAbsolutePath();
+            // Notificar que se ha guardado un archivo de video
+            if (onArchivoGuardadoListener != null) {
+                onArchivoGuardadoListener.accept(rutaVideo);
+            }
+            
+            return rutaVideo;
         }
         
         return null;
