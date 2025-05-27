@@ -81,19 +81,28 @@ public class MapaCamarasPanel extends JPanel {
                     
                     // Obtener el ID de la cámara
                     int id = -1;
-                    if (camara.has("idCamara") && !camara.isNull("idCamara")) {
-                        id = camara.getInt("idCamara");
+                    try {
+                        if (camara.has("idCamara") && !camara.isNull("idCamara")) {
+                            id = camara.getInt("idCamara");
+                        }
+                    } catch (Exception e) {
+                        // Usar el índice como respaldo
+                        id = i + 1;
                     }
                     
                     // If no ID found, use index as fallback
                     if (id == -1) {
                         id = i + 1;
+
                     }
                     
                     // Create a custom waypoint with camera information
                     CameraWaypoint waypoint = new CameraWaypoint(id, lat, lng, nombre, ip, direccion, tipo, activa);
                     waypoints.add(waypoint);
                     
+
+                } else {
+
                 }
             } catch (Exception e) {
                 System.err.println("Error al procesar cámara: " + e.getMessage());
@@ -103,6 +112,7 @@ public class MapaCamarasPanel extends JPanel {
         
         // Only proceed if we have cameras to show
         if (waypoints.isEmpty()) {
+
             return;
         }
         
@@ -143,14 +153,14 @@ public class MapaCamarasPanel extends JPanel {
                     GeoPosition center = new GeoPosition(centerLat / count, centerLon / count);
                     mapViewer.setAddressLocation(center);
                     
-                    // Always use zoom level 6
+                    // Always use zoom level 7
                     mapViewer.setZoom(6);
                 }
             }
             
 
         } catch (Exception e) {
-            System.err.println("Error al ajustar la vista del mapa: " + e.getMessage());
+
         }
         
         // Force map update

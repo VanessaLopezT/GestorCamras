@@ -4,15 +4,20 @@ import java.awt.Color;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Enumeration;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
@@ -27,26 +32,85 @@ public class LoginFrame extends JFrame {
     private JLabel lbEstado;
     
     // Constantes para la configuración
+    private static final int DEFAULT_PORT = 8080;
+    private String serverIp = "127.0.0.1"; // Valor por defecto
 
-    private String serverUrl;
-
-
-    
-
-    
-    public LoginFrame(String serverUrl) {
-        this.serverUrl = serverUrl;
-        System.out.println("URL del servidor: " + serverUrl);
-        
-        // Extraer la IP de la URL
+    /**
+     * Obtiene la dirección IP local de la máquina
+     * @return La dirección IP local o null si no se pudo determinar
+     */
+    private String getLocalIpAddress() {
         try {
-            URI uri = new URI(serverUrl);
-            String host = uri.getHost();
-            int port = uri.getPort();
-            System.out.println("Conectando al servidor en " + host + ":" + port);
-        } catch (Exception e) {
-            System.err.println("Error al analizar la URL del servidor: " + e.getMessage());
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                // Ignorar interfaces que no estén activas o sean loopback
+                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || iface.isPointToPoint()) {
+                    continue;
+                }
+
+                Enumeration<InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    // Solo direcciones IPv4
+                    if (addr.isLoopbackAddress() || !(addr.getHostAddress().contains("."))) {
+                        continue;
+                    }
+                    
+                    String hostAddress = addr.getHostAddress();
+                    // Verificar que sea una dirección IP privada
+                    if (hostAddress.startsWith("192.168.") || 
+                        hostAddress.startsWith("10.") || 
+                        hostAddress.startsWith("172.16.")) {
+                        return hostAddress;
+                    }
+                }
+            }
+        } catch (SocketException e) {
+            e.printStackTrace();
         }
+        return null;
+    }
+    
+    /**
+     * Muestra un diálogo para que el usuario confirme o modifique la IP del servidor
+     * @param defaultIp La IP por defecto a mostrar
+     * @return La IP ingresada por el usuario o null si se canceló
+     */
+    private String showServerIpDialog(String defaultIp) {
+        String ip = (String) JOptionPane.showInputDialog(
+            null,
+            "Ingrese la dirección IP del servidor:",
+            "Configuración de conexión",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            null,
+            defaultIp
+        );
+        
+        if (ip != null) {
+            ip = ip.trim();
+            if (ip.isEmpty()) {
+                ip = defaultIp;
+            }
+        }
+        return ip;
+    }
+    
+    public LoginFrame() {
+        // Obtener la IP local al iniciar
+        String localIp = getLocalIpAddress();
+        if (localIp != null) {
+            serverIp = localIp;
+        }
+        
+        // Pedir la IP del servidor al inicio
+        String confirmedIp = showServerIpDialog(serverIp);
+        if (confirmedIp == null) {
+            // Si el usuario cancela, cerramos la aplicación
+            System.exit(0);
+        }
+        serverIp = confirmedIp;
         setTitle("Login - Gestor de Cámaras");
         setSize(350, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -94,7 +158,7 @@ public class LoginFrame extends JFrame {
 
     private boolean isServerReachable(String url) {
         try {
-            System.out.println("Verificando conexión con el servidor: " + url);
+
             // Crear un cliente HTTP
             HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
@@ -110,7 +174,7 @@ public class LoginFrame extends JFrame {
             // Enviar la solicitud y obtener la respuesta
             try {
                 HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                System.out.println("Código de respuesta del servidor: " + response.statusCode());
+
                 return response.statusCode() < 400; // Cualquier código de éxito (2xx, 3xx)
             } catch (Exception e) {
                 System.err.println("Error al conectar con el servidor: " + e.getMessage());
@@ -133,7 +197,7 @@ public class LoginFrame extends JFrame {
                 tfUsuario.setText("oper@gestor.com");
                 pfClave.setText("oper123");
                 
-                System.out.println("Credenciales establecidas. Iniciando sesión...");
+
                 
                 // Llamar directamente a login después de un pequeño retraso
                 // para asegurar que la UI se actualice
@@ -151,6 +215,7 @@ public class LoginFrame extends JFrame {
                 
             } catch (Exception ex) {
                 lbEstado.setText("Error al configurar credenciales: " + ex.getMessage());
+                ex.printStackTrace();
             }
         });
     }
@@ -158,15 +223,14 @@ public class LoginFrame extends JFrame {
     private void login() {
         String usuario = tfUsuario.getText().trim();
         String password = new String(pfClave.getPassword());
+        String servidorUrl = "http://" + serverIp + ":" + DEFAULT_PORT;
         
-        System.out.println("=== INICIO DE SESIÓN ===");
-        System.out.println("URL del servidor: " + serverUrl);
-        System.out.println("Usuario: " + usuario);
+        // Iniciando proceso de autenticación
         
         try {
             // Validar que la URL del servidor sea accesible
-            if (!isServerReachable(serverUrl)) {
-                String errorMsg = "No se puede conectar al servidor en " + serverUrl;
+            if (!isServerReachable(servidorUrl)) {
+                String errorMsg = "No se puede conectar al servidor en " + servidorUrl;
                 System.err.println(errorMsg);
                 lbEstado.setText(errorMsg);
                 return;
@@ -184,45 +248,38 @@ public class LoginFrame extends JFrame {
         }
 
         try {
-            System.out.println("Preparando solicitud de login...");
+
             HttpClient client = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
-                .followRedirects(HttpClient.Redirect.NORMAL)  // Seguir redirecciones HTTP normales
                 .build();
                 
             String params = "username=" + URLEncoder.encode(usuario, "UTF-8") + "&password=" + URLEncoder.encode(password, "UTF-8");
-            System.out.println("Parámetros de login: " + params.replace(password, "*****"));
+
             
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(serverUrl + "/login"))
+                    .uri(URI.create(servidorUrl + "/login"))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Accept", "*/*")
                     .timeout(Duration.ofSeconds(10))
                     .POST(HttpRequest.BodyPublishers.ofString(params))
                     .build();
             
-            System.out.println("Enviando solicitud de login...");
+
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println("Respuesta recibida del servidor");
+
             int code = response.statusCode();
-            System.out.println("Código de respuesta del servidor: " + code);
-            System.out.println("Headers de respuesta: " + response.headers().map());
+
             
-            System.out.println("Código de respuesta del login: " + code);
+
             
-            // Verificar si la respuesta es exitosa o de redirección
-            if (code == 200 || code == 302) {
-                // Si es una redirección, obtener la nueva ubicación
-                if (code == 302) {
-                    String newLocation = response.headers().firstValue("Location").orElse("");
-                    System.out.println("Redirigiendo a: " + newLocation);
-                }
+            // Verificar si hay redirección
+            if (code == 302 || code == 200) {
                 // Obtener la cookie de sesión
                 String headerCookies = response.headers().firstValue("Set-Cookie").orElse(null);
                 if (headerCookies != null) {
                     String sessionCookie = headerCookies.split(";")[0];
-                    System.out.println("Session Cookie obtenida: " + sessionCookie);
+
                     
                     // Verificar si la cookie es válida
                     if (sessionCookie == null || sessionCookie.trim().isEmpty()) {
@@ -232,23 +289,22 @@ public class LoginFrame extends JFrame {
                     // Verificar rol del usuario
                     try {
                         HttpRequest requestUser = HttpRequest.newBuilder()
-                                .uri(URI.create(serverUrl + "/api/usuario/actual"))
+                                .uri(URI.create(servidorUrl + "/api/usuario/actual"))
                                 .header("Cookie", sessionCookie)
                                 .GET()
                                 .build();
 
-                        System.out.println("Solicitando información del usuario...");
+
                         HttpResponse<String> responseUser = client.send(requestUser, HttpResponse.BodyHandlers.ofString());
                         int responseCode = responseUser.statusCode();
-                        System.out.println("Código de respuesta de /api/usuario/actual: " + responseCode);
-                        System.out.println("Cuerpo de la respuesta: " + responseUser.body());
+
                         
                         if (responseCode == 200) {
                             String jsonResponse = responseUser.body();
-                            System.out.println("Respuesta del servidor: " + jsonResponse);
+
                             JSONObject obj = new JSONObject(jsonResponse);
                             String nombreRol = obj.getString("nombreRol");
-                            System.out.println("Nombre del rol: " + nombreRol);
+
 
                             if (nombreRol.equalsIgnoreCase("OPERADOR")) {
                                 SwingUtilities.invokeLater(() -> {

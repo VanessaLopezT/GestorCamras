@@ -38,8 +38,7 @@ public class VisualizadorUI extends JFrame {
         btnSalir.addActionListener(e -> {
             // Aquí podrías agregar lógica para cerrar sesión en el servidor
             dispose();
-            // Usar la URL del servidor por defecto
-            new LoginFrame("http://localhost:8080").setVisible(true);
+            new LoginFrame().setVisible(true);
         });
         
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));

@@ -45,8 +45,7 @@ public class ManejadorCamara {
             // Cargar la biblioteca desde la ruta de instalación
             String opencvPath = "C:\\opencv\\build\\java\\x64\\opencv_java455.dll";
             System.load(opencvPath);
-            
-            // OpenCV cargado correctamente
+            // OpenCV cargado desde ruta personalizada
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null,
@@ -128,13 +127,13 @@ public class ManejadorCamara {
         
         // Verificar la configuración
         double fpsConfigurado = captura.get(Videoio.CAP_PROP_FPS);
-        // FPS configurados
+
         
         // Si no se pudo configurar a 30 FPS, intentar con un valor más bajo
         if (fpsConfigurado <= 0 || fpsConfigurado > 60) {
             captura.set(Videoio.CAP_PROP_FPS, 15);
             fpsConfigurado = captura.get(Videoio.CAP_PROP_FPS);
-            // FPS reconfigurados
+
         }
         captura.set(Videoio.CAP_PROP_FPS, FPS_ESTANDAR);
         
@@ -273,7 +272,7 @@ public class ManejadorCamara {
             if (tamanoMB > MAX_TAMANO_FOTO_MB) {
                 mostrarError("La foto es demasiado grande (" + tamanoMB + "MB). Tamaño máximo permitido: " + MAX_TAMANO_FOTO_MB + "MB");
                 if (!archivoFoto.delete()) {
-                    System.err.println("No se pudo eliminar la foto con tamaño excesivo: " + archivoFoto.getAbsolutePath());
+
                 }
                 return null;
             }
@@ -337,7 +336,6 @@ public class ManejadorCamara {
             grabadorInicializado = grabadorVideo.isOpened();
             
             if (grabadorInicializado) {
-                // Grabador de video inicializado
             }
         }
         
@@ -469,7 +467,7 @@ public class ManejadorCamara {
             
             return imagen;
         } catch (Exception e) {
-            System.err.println("Error al convertir Mat a BufferedImage: " + e.getMessage());
+
             return null;
         }
     }

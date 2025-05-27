@@ -8,7 +8,10 @@ import java.awt.*;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -18,9 +21,14 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class VisualizadorMultimediaUI extends JFrame {
+    // Método para registrar mensajes de depuración
+    private void log(String mensaje) {
+        System.out.println("[VisualizadorMultimediaUI] " + mensaje);
+    }
+    
     // Método para registrar mensajes en el hilo de Swing
     private void logEnSwing(String mensaje) {
-        SwingUtilities.invokeLater(() -> System.out.println("[VisualizadorMultimediaUI] " + mensaje));
+        SwingUtilities.invokeLater(() -> log(mensaje));
     }
     
     private Long obtenerIdCamaraSeleccionada() {
@@ -162,7 +170,7 @@ public class VisualizadorMultimediaUI extends JFrame {
             protected Void doInBackground() {
                 try {
                     String serverUrl = "http://localhost:8080/api/equipos";
-                    System.out.println("[VisualizadorMultimediaUI] Realizando solicitud a: " + serverUrl);
+                    log("Realizando solicitud a: " + serverUrl);
                     
                     // Crear cliente HTTP
                     java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
@@ -172,18 +180,18 @@ public class VisualizadorMultimediaUI extends JFrame {
                         .GET()
                         .build();
                     
-                    System.out.println("[VisualizadorMultimediaUI] Enviando solicitud HTTP...");
+                    log("Enviando solicitud HTTP...");
                     java.net.http.HttpResponse<String> response = client.send(
                         request, 
                         java.net.http.HttpResponse.BodyHandlers.ofString()
                     );
                     
                     int statusCode = response.statusCode();
-                    System.out.println("[VisualizadorMultimediaUI] Código de respuesta: " + statusCode);
+                    log("Código de respuesta: " + statusCode);
                     
                     if (statusCode == 200) {
                         String responseBody = response.body();
-                        System.out.println("[VisualizadorMultimediaUI] Respuesta recibida: " + responseBody);
+                        log("Respuesta recibida: " + responseBody);
                         
                         JSONArray equipos = new JSONArray(responseBody);
                         logEnSwing("Equipos recibidos: " + equipos.length());
@@ -192,8 +200,8 @@ public class VisualizadorMultimediaUI extends JFrame {
                         SwingUtilities.invokeLater(() -> actualizarListaEquipos(equipos));
                     } else {
                         String errorMessage = "Error al cargar equipos. Código: " + statusCode;
-                        System.out.println("[VisualizadorMultimediaUI] " + errorMessage);
-                        System.out.println("[VisualizadorMultimediaUI] Cuerpo de la respuesta: " + response.body());
+                        log(errorMessage);
+                        log("Cuerpo de la respuesta: " + response.body());
                         
                         // Mostrar el error en la interfaz
                         SwingUtilities.invokeLater(() -> 
@@ -202,7 +210,7 @@ public class VisualizadorMultimediaUI extends JFrame {
                     }
                 } catch (Exception e) {
                     String errorMsg = "Error al cargar equipos: " + e.getMessage();
-                    System.out.println("[VisualizadorMultimediaUI] " + errorMsg);
+                    log(errorMsg);
                     e.printStackTrace();
                     
                     // Mostrar el error en la interfaz
@@ -215,7 +223,7 @@ public class VisualizadorMultimediaUI extends JFrame {
             
             @Override
             protected void done() {
-                System.out.println("[VisualizadorMultimediaUI] Finalizada la carga de equipos");
+                log("Finalizada la carga de equipos");
             }
         };
         
