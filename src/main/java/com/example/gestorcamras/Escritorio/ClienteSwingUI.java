@@ -36,9 +36,22 @@ public class ClienteSwingUI extends JFrame {
     private final ClienteSwingController controller;
     private final String usuario;
     
-    public ClienteSwingUI(String usuario, String cookieSesion) {
+    public ClienteSwingUI(String usuario, String cookieSesion, String serverIp) {
         this.usuario = usuario;
-        this.controller = new ClienteSwingController(usuario, cookieSesion, null);
+        
+        // Crear una variable local final para la URL formateada
+        String urlFinal = serverIp;
+        
+        // Asegurarse de que la URL tenga el formato correcto
+        if (urlFinal != null && !urlFinal.startsWith("http")) {
+            urlFinal = "http://" + urlFinal;
+        }
+        if (urlFinal != null && !urlFinal.endsWith(":8080")) {
+            urlFinal = urlFinal + ":8080";
+        }
+        
+        final String finalUrl = urlFinal;  // Variable efectivamente final para la expresión lambda
+        this.controller = new ClienteSwingController(usuario, cookieSesion, finalUrl);
         
         // Configurar consumidor de logs
         controller.setLogConsumer(this::log);
@@ -53,7 +66,7 @@ public class ClienteSwingUI extends JFrame {
                 SwingUtilities.invokeLater(this::cargarCamaras);
             } else {
                 JOptionPane.showMessageDialog(this, 
-                    "No se pudo conectar al servidor. Verifica que el servidor esté en ejecución y la URL sea correcta.",
+                    String.format("No se pudo conectar al servidor en %s. Verifica que el servidor esté en ejecución y la URL sea correcta.", finalUrl),
                     "Error de conexión", 
                     JOptionPane.ERROR_MESSAGE);
                 System.exit(1);

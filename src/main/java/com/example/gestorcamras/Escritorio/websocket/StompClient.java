@@ -47,9 +47,12 @@ public class StompClient {
      */
     private void enviarMensajeSTOMP(String mensaje) {
         if (webSocketClient == null || !webSocketClient.isOpen()) {
-            logger.accept("No se puede enviar mensaje: WebSocket no conectado");
+            String errorMsg = "[WebSocket] No se puede enviar mensaje: WebSocket no conectado";
+            logger.accept(errorMsg);
+            System.err.println(errorMsg);
             // Intentar reconectar si no estamos en medio de una reconexión
             if (!reconectando) {
+                logger.accept("[WebSocket] Intentando reconexión automática...");
                 reconectar();
             }
             return;
@@ -180,106 +183,121 @@ public class StompClient {
 
     private void reconectar() {
         if (reconectando) {
-            logger.accept("Ya hay una reconexión en curso");
+            logger.accept("[WebSocket] Ya hay una reconexión en curso");
             return;
         }
 
+        // Incrementar el contador de reintentos
+        reintentosReconexion++;
+        
+        // No intentar reconectar si ya superamos el máximo de reintentos
+        if (reintentosReconexion > 10) {
+            String errorMsg = String.format("[WebSocket] Se superó el número máximo de reintentos de reconexión (%d)", reintentosReconexion - 1);
+            logger.accept(errorMsg);
+            System.err.println(errorMsg);
+            return;
+        }
+        
         reconectando = true;
+        logger.accept("[WebSocket] Iniciando proceso de reconexión (intento " + reintentosReconexion + ")");
 
         // Cerrar la conexión actual si existe
         if (webSocketClient != null) {
             try {
-                logger.accept("Cerrando conexión WebSocket actual...");
+                logger.accept("[WebSocket] Cerrando conexión WebSocket actual...");
                 webSocketClient.close();
             } catch (Exception e) {
-                logger.accept("Error al cerrar la conexión WebSocket: " + e.getMessage());
+                logger.accept("[WebSocket] Error al cerrar la conexión: " + e.getMessage());
             } finally {
                 webSocketClient = null;
             }
         }
-
-        // Esperar antes de intentar reconectar
-        int delay = Math.min(reintentosReconexion * 1000, 30000); // Hasta 30 segundos
-        logger.accept(String.format("Intentando reconectar en %d segundos...", delay / 1000));
-
+        
+        // Calcular tiempo de espera con backoff exponencial (empezando en 1s, máximo 30s) y jitter
+        int tiempoBase = Math.min(1000 * (int)Math.pow(2, reintentosReconexion - 1), 30000);
+        int jitter = (int)(Math.random() * 1000); // Añadir jitter aleatorio (0-1000ms)
+        int tiempoEspera = Math.max(1000, tiempoBase + jitter); // Mínimo 1 segundo
+        
+        String logMsg = String.format("[WebSocket] Intento de reconexión #%d en %d ms (base: %d, jitter: %d)", 
+            reintentosReconexion, tiempoEspera, tiempoBase, jitter);
+        logger.accept(logMsg);
+        
         new Thread(() -> {
             try {
-                Thread.sleep(delay);
-
-                // Incrementar el contador de reintentos (con un máximo razonable)
-                reintentosReconexion = Math.min(reintentosReconexion + 1, 10);
-
-                logger.accept("Iniciando reconexión (intento " + reintentosReconexion + ")");
-
-                // Intentar reconectar
+                Thread.sleep(tiempoEspera);
+                logger.accept("[WebSocket] Iniciando nueva conexión...");
                 conectarWebSocket();
-
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                logger.accept("Hilo de reconexión interrumpido");
-            } catch (Exception e) {
-                logger.accept("Error en el hilo de reconexión: " + e.getMessage());
-                e.printStackTrace();
-            } finally {
+                String errorMsg = "[WebSocket] Reconexión interrumpida: " + e.getMessage();
+                logger.accept(errorMsg);
+                System.err.println(errorMsg);
                 reconectando = false;
+            } catch (Exception e) {
+                String errorMsg = "[WebSocket] Error en la reconexión: " + e.getClass().getSimpleName() + " - " + e.getMessage();
+                logger.accept(errorMsg);
+                System.err.println(errorMsg);
+                
+                // Marcar que ya no estamos en proceso de reconexión
+                reconectando = false;
+                
+                // Solo reintentar si no es un error crítico
+                if (!(e instanceof IllegalArgumentException || e instanceof SecurityException)) {
+                    // Disminuir el contador para que el siguiente reintento use el mismo nivel
+                    reintentosReconexion--;
+                    logger.accept("[WebSocket] Reintentando conexión...");
+                    reconectar();
+                }
             }
-        }, "Reconexion-WebSocket").start();
+        }, "WebSocket-Reconectar-" + reintentosReconexion).start();
     }
 
-    private void conectarWebSocket() throws URISyntaxException {
-        if (webSocketClient != null) {
-            try {
-                webSocketClient.close();
-            } catch (Exception e) {
-                logger.accept("Error al cerrar conexión WebSocket existente: " + e.getMessage());
-            }
-            webSocketClient = null;
-        }
-
-        logger.accept("Conectando a WebSocket en " + serverUrl);
-
+    private void conectarWebSocket() {
         try {
-            webSocketClient = new WebSocketClient(new URI(serverUrl)) {
+            // Cerrar la conexión existente si hay una
+            if (webSocketClient != null) {
+                try {
+                    webSocketClient.close();
+                } catch (Exception e) {
+                    logger.accept("[WebSocket] Error al cerrar conexión existente: " + e.getMessage());
+                }
+            }
+
+            // Asegurarse de que la URL use ws:// o wss://
+            String urlConexion = serverUrl;
+            if (!urlConexion.startsWith("ws://") && !urlConexion.startsWith("wss://")) {
+                // Reemplazar http:// por ws:// y https:// por wss://
+                urlConexion = urlConexion.replace("http://", "ws://").replace("https://", "wss://");
+                logger.accept("[WebSocket] URL convertida a: " + urlConexion);
+            }
+
+            // Crear una nueva conexión WebSocket
+            URI serverUri = new URI(urlConexion);
+            logger.accept("[WebSocket] Conectando a " + serverUri);
+
+            webSocketClient = new WebSocketClient(serverUri) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
-                    logger.accept("Conexión WebSocket establecida con " + serverUrl);
+                    logger.accept("[WebSocket] Conexión establecida con éxito");
+                    reconectando = false;
+                    reintentosReconexion = 0;
                     
-                    // Enviar mensaje de conexión STOMP
-                    String connectMsg = STOMP_CONNECT;
-                    if (cookieSesion != null && !cookieSesion.isEmpty()) {
-                        connectMsg = "CONNECT\n" +
-                                     "accept-version:1.1,1.0\n" +
-                                     "heart-beat:10000,10000\n" +
-                                     "Cookie: JSESSIONID=" + cookieSesion + "\n\n\u0000";
+                    // Esperar un momento antes de enviar el CONNECT
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
                     }
                     
-                    logger.accept("Enviando CONNECT STOMP...");
-                    send(connectMsg);
+                    // Enviar mensaje CONNECT STOMP
+                    enviarMensajeSTOMP(STOMP_CONNECT);
                 }
+
 
                 @Override
                 public void onMessage(String message) {
-                    try {
-                        if (message == null || message.trim().isEmpty()) {
-                            logger.accept("Mensaje de texto vacío recibido");
-                            return;
-                        }
-
-                        logger.accept("Mensaje de texto recibido: " + message);
-
-                        // Procesar mensajes SockJS
-                        if (message.equals("o") || message.startsWith("a[")) {
-                            procesarMensajeSockJS(message);
-                        } else if (message.startsWith("{") || message.startsWith("[")) {
-                            // Posible mensaje JSON directo
-                            procesarMensajeSTOMP(message);
-                        } else {
-                            logger.accept("Mensaje de texto no reconocido: " + message);
-                        }
-                    } catch (Exception e) {
-                        logger.accept("Error procesando mensaje de texto: " + e.getMessage());
-                        e.printStackTrace();
-                    }
+                    logger.accept("[WebSocket] Mensaje recibido: " + message);
+                    procesarMensajeSockJS(message);
                 }
 
                 @Override
@@ -304,6 +322,7 @@ public class StompClient {
                             }
                         }
 
+
                         // Intentar decodificar como texto
                         bytes.mark();
                         try {
@@ -324,17 +343,29 @@ public class StompClient {
 
                 @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    logger.accept(String.format("Conexión WebSocket cerrada. Código: %d, Razón: %s, Remoto: %b", 
-                            code, reason, remote));
-                    if (!reconectando) {
+                    String mensajeCierre = String.format(
+                        "[WebSocket] Conexión cerrada. Código: %d, Razón: %s, Remoto: %b", 
+                        code, reason, remote);
+                    logger.accept(mensajeCierre);
+                    
+                    // Intentar reconectar si no fue un cierre intencional
+                    if (code != 1000) { // 1000 = cierre normal
                         reconectar();
                     }
                 }
 
                 @Override
                 public void onError(Exception ex) {
-                    logger.accept("Error en WebSocket: " + ex.toString());
-                    ex.printStackTrace();
+                    String errorMsg = "[WebSocket] Error: " + ex.getMessage();
+                    logger.accept(errorMsg);
+                    
+                    // No imprimir el stack trace completo para errores de conexión comunes
+                    if (!(ex instanceof java.net.ConnectException || 
+                          ex instanceof java.net.UnknownHostException)) {
+                        ex.printStackTrace();
+                    }
+                    
+                    // Intentar reconectar en caso de error
                     if (!reconectando) {
                         reconectar();
                     }
@@ -355,23 +386,53 @@ public class StompClient {
 
             // Conectar con timeout
             try {
-                logger.accept("Iniciando conexión WebSocket bloqueante...");
-                boolean connected = webSocketClient.connectBlocking(10, TimeUnit.SECONDS);
-                if (!connected) {
-                    throw new IllegalStateException("Tiempo de espera agotado al conectar al WebSocket");
+                logger.accept("Iniciando conexión WebSocket...");
+                webSocketClient.connect();
+                
+                // Esperar hasta 10 segundos para la conexión
+                int intentos = 0;
+                while (!webSocketClient.isOpen() && intentos < 50) {
+                    try {
+                        Thread.sleep(200);
+                        intentos++;
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("Interrupción durante la conexión", e);
+                    }
                 }
+                
+                if (!webSocketClient.isOpen()) {
+                    webSocketClient.close();
+                    throw new IllegalStateException("Tiempo de espera agotado al conectar al WebSocket después de " + 
+                        (50 * 200) + "ms");
+                }
+                
                 logger.accept("Conexión WebSocket establecida exitosamente");
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                logger.accept("Conexión WebSocket interrumpida");
-                throw new RuntimeException("Conexión interrumpida", ie);
+                
+            } catch (Exception e) {
+                String errorMsg = "[WebSocket] Error al conectar: " + e.getMessage();
+                logger.accept(errorMsg);
+                if (webSocketClient != null) {
+                    try { webSocketClient.close(); } catch (Exception ignored) {}
+                }
+                throw new IllegalStateException("Error al conectar al WebSocket", e);
             }
-
+            
+        } catch (URISyntaxException e) {
+            String errorMsg = "[WebSocket] URL inválida: " + e.getMessage();
+            logger.accept(errorMsg);
+            throw new IllegalArgumentException(errorMsg, e);
         } catch (Exception e) {
-            logger.accept("Error al conectar WebSocket: " + e.getMessage());
-            e.printStackTrace();
-            reconectar();
-            throw e;
+            String errorMsg = "[WebSocket] Error inesperado: " + e.getMessage();
+            logger.accept(errorMsg);
+            
+            // Intentar reconectar si es un error de conexión
+            if (e.getCause() instanceof java.net.ConnectException || 
+                e.getCause() instanceof java.net.UnknownHostException) {
+                reconectar();
+            }
+            
+            throw new IllegalStateException("Error inesperado al conectar al WebSocket", e);
         }
     }
 
@@ -491,37 +552,53 @@ public class StompClient {
     }
 
     /**
-     * Cierra la conexión WebSocket
-     */
-    /**
      * Cierra la conexión WebSocket de manera ordenada
      */
     public void desconectar() {
-        if (webSocketClient != null) {
+        if (webSocketClient == null) {
+            logger.accept("[WebSocket] No hay conexión WebSocket activa para cerrar");
+            return;
+        }
+        
+        try {
+            logger.accept("[WebSocket] Iniciando cierre ordenado de la conexión WebSocket...");
+            
+            // Enviar mensaje de desconexión STOMP
+            logger.accept("[WebSocket] Enviando mensaje DISCONNECT STOMP...");
+            enviarMensajeSTOMP(STOMP_DISCONNECT);
+            
+            // Dar tiempo para que se envíe el mensaje de desconexión
             try {
-                // Enviar mensaje de desconexión STOMP
-                enviarMensajeSTOMP(STOMP_DISCONNECT);
-                
-                // Dar tiempo para que se envíe el mensaje de desconexión
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                }
-                
-                // Cerrar la conexión
-                webSocketClient.close();
-                logger.accept("Conexión WebSocket cerrada correctamente");
-            } catch (Exception e) {
-                logger.accept("Error al cerrar la conexión WebSocket: " + e.getMessage());
-                try {
-                    webSocketClient.close();
-                } catch (Exception ex) {
-                    // Ignorar errores al cerrar
-                }
-            } finally {
-                webSocketClient = null;
+                int tiempoEspera = 200; // ms
+                logger.accept("[WebSocket] Esperando " + tiempoEspera + "ms para asegurar el envío...");
+                Thread.sleep(tiempoEspera);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logger.accept("[WebSocket] Espera interrumpida: " + ie.getMessage());
             }
+            
+            // Cerrar la conexión
+            logger.accept("[WebSocket] Cerrando conexión WebSocket...");
+            webSocketClient.close();
+            logger.accept("[WebSocket] Conexión WebSocket cerrada correctamente");
+            System.out.println("[WebSocket] Conexión cerrada correctamente");
+        } catch (Exception e) {
+            String errorMsg = "[WebSocket] Error al cerrar la conexión: " + e.getClass().getSimpleName() + " - " + e.getMessage();
+            logger.accept(errorMsg);
+            System.err.println(errorMsg);
+            
+            // Intentar forzar el cierre si hubo un error
+            try {
+                logger.accept("[WebSocket] Forzando cierre de la conexión...");
+                webSocketClient.close();
+            } catch (Exception ex) {
+                String forceCloseError = "[WebSocket] Error al forzar cierre: " + ex.getMessage();
+                logger.accept(forceCloseError);
+                System.err.println(forceCloseError);
+            }
+        } finally {
+            webSocketClient = null;
+            logger.accept("[WebSocket] Referencia WebSocket liberada");
         }
     }
 }

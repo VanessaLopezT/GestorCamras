@@ -9,10 +9,12 @@ public class VisualizadorUI extends JFrame {
     private final String usuario;
     @SuppressWarnings("unused")
     private final String sessionCookie;
+    private final String serverIp;
 
-    public VisualizadorUI(String usuario, String sessionCookie) {
+    public VisualizadorUI(String usuario, String sessionCookie, String serverIp) {
         this.usuario = usuario;
         this.sessionCookie = sessionCookie;
+        this.serverIp = serverIp;
         
         // Configuración básica de la ventana
         setTitle("Visualizador - Gestor de Cámaras");
@@ -38,7 +40,7 @@ public class VisualizadorUI extends JFrame {
         btnSalir.addActionListener(e -> {
             // Aquí podrías agregar lógica para cerrar sesión en el servidor
             dispose();
-            new LoginFrame().setVisible(true);
+            new LoginFrame(serverIp).setVisible(true);
         });
         
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));

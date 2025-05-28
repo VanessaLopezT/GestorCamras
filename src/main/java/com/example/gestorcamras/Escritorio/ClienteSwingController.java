@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
+import javax.swing.SwingUtilities;
 import com.example.gestorcamras.Escritorio.websocket.StompClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -34,7 +35,22 @@ public class ClienteSwingController {
 
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
         this.cookieSesion = cookieSesion;
-        this.servidorUrl = servidorUrl != null ? servidorUrl : "http://localhost:8080";
+        
+        // Asegurarse de que la URL tenga el formato correcto
+        if (servidorUrl == null || servidorUrl.trim().isEmpty()) {
+            servidorUrl = "http://localhost:8080";
+        } else if (!servidorUrl.startsWith("http")) {
+            servidorUrl = "http://" + servidorUrl;
+        }
+        
+        // Asegurarse de que la URL no termine con /
+        if (servidorUrl.endsWith("/")) {
+            servidorUrl = servidorUrl.substring(0, servidorUrl.length() - 1);
+        }
+        
+        this.servidorUrl = servidorUrl;
+        log("URL del servidor configurada a: " + this.servidorUrl);
+        
         // Inicializar servicios
         this.camaraService = new ClienteCamaraService(this.servidorUrl, cookieSesion);
         this.equipoService = new ClienteEquipoService(this.servidorUrl, cookieSesion);
@@ -52,9 +68,23 @@ public class ClienteSwingController {
     /**
      * Inicializa la conexión WebSocket con el servidor usando STOMP
      */
+    private static final int MAX_RECONNECT_ATTEMPTS = 5;
+    private static final long INITIAL_RECONNECT_DELAY = 2000; // 2 segundos
+    private int reconnectAttempts = 0;
+    private Timer reconnectTimer;
+    
     private void inicializarWebSocket() {
         try {
             log("Inicializando conexión WebSocket con servidor: " + servidorUrl);
+            
+            // Cancelar cualquier intento de reconexión pendiente
+            if (reconnectTimer != null) {
+                reconnectTimer.cancel();
+                reconnectTimer.purge();
+            }
+            
+            // Resetear contador de reintentos
+            reconnectAttempts = 0;
             
             // Pasamos la URL HTTP/HTTPS directamente, StompClient se encargará de la conversión a WebSocket
             stompClient = new StompClient(
@@ -68,8 +98,20 @@ public class ClienteSwingController {
             if (stompClient != null) {
                 try {
                     stompClient.suscribirCanales();
+                    log("Conexión WebSocket establecida correctamente con el servidor");
+                    
+                    // Notificar a los consumidores de estado de conexión
+                    if (connectionStatusConsumer != null) {
+                        connectionStatusConsumer.accept(true);
+                    }
                 } catch (Exception ex) {
-                    log("Error al suscribir canales: " + ex.getMessage());
+                    String errorMsg = "Error al suscribir canales: " + ex.getMessage();
+                    log(errorMsg);
+                    System.err.println(errorMsg);
+                    ex.printStackTrace(System.err);
+                    
+                    // Intentar reconectar
+                    scheduleReconnect();
                 }
             }
         } catch (Exception ex) {
@@ -81,18 +123,46 @@ public class ClienteSwingController {
             System.err.println("Error en inicializarWebSocket:");
             ex.printStackTrace(System.err);
             
-            // Programar un reintento después de un tiempo
-            final Timer timer = new Timer();
-            TimerTask task = new TimerTask() {
-                @Override
-                public void run() {
-                    log("Intentando reconexión WebSocket...");
-                    inicializarWebSocket();
-                    timer.cancel(); // Cancelar el timer después de usarlo
-                }
-            };
-            timer.schedule(task, 5000);} // Reintentar después de 5 segundos
+            // Intentar reconectar
+            scheduleReconnect();
         }
+    }
+    
+    /**
+     * Programa un intento de reconexión con retroceso exponencial
+     */
+    private void scheduleReconnect() {
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            log("Se alcanzó el número máximo de intentos de reconexión (" + MAX_RECONNECT_ATTEMPTS + "). No se intentará reconectar automáticamente.");
+            if (connectionStatusConsumer != null) {
+                connectionStatusConsumer.accept(false);
+            }
+            return;
+        }
+        
+        // Calcular el tiempo de espera con retroceso exponencial
+        long delay = INITIAL_RECONNECT_DELAY * (long)Math.pow(2, reconnectAttempts);
+        reconnectAttempts++;
+        
+        log(String.format("Intentando reconexión %d de %d en %d ms...", 
+            reconnectAttempts, MAX_RECONNECT_ATTEMPTS, delay));
+        
+        // Programar el reintento
+        reconnectTimer = new Timer("WebSocketReconnectTimer", true);
+        reconnectTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                SwingUtilities.invokeLater(() -> inicializarWebSocket());
+            }
+        }, delay);
+    }
+    
+    /**
+     * Establece el consumidor de estado de conexión
+     */
+    public void setConnectionStatusConsumer(Consumer<Boolean> consumer) {
+        this.connectionStatusConsumer = consumer;
+    }
     
     
     /**
@@ -136,10 +206,6 @@ public class ClienteSwingController {
     
     public void setLogConsumer(Consumer<String> logConsumer) {
         this.logConsumer = logConsumer;
-    }
-
-    public void setConnectionStatusConsumer(Consumer<Boolean> connectionStatusConsumer) {
-        this.connectionStatusConsumer = connectionStatusConsumer;
     }
 
     private void log(String message) {

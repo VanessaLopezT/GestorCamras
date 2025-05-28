@@ -184,19 +184,28 @@ public class LoginFrame extends JFrame {
     }
     
     public LoginFrame() {
-        // Obtener la IP local al iniciar
-        String localIp = getLocalIpAddress();
-        if (localIp != null) {
-            serverIp = localIp;
+        this(null);
+    }
+    
+    public LoginFrame(String serverIp) {
+        if (serverIp == null || serverIp.trim().isEmpty()) {
+            // Obtener la IP local al iniciar si no se proporciona una IP
+            String localIp = getLocalIpAddress();
+            if (localIp != null) {
+                this.serverIp = localIp;
+            }
+            
+            // Pedir la IP del servidor al inicio
+            String confirmedIp = showServerIpDialog(this.serverIp);
+            if (confirmedIp == null) {
+                // Si el usuario cancela, cerramos la aplicación
+                System.exit(0);
+            }
+            this.serverIp = confirmedIp;
+        } else {
+            // Usar la IP proporcionada
+            this.serverIp = serverIp;
         }
-        
-        // Pedir la IP del servidor al inicio
-        String confirmedIp = showServerIpDialog(serverIp);
-        if (confirmedIp == null) {
-            // Si el usuario cancela, cerramos la aplicación
-            System.exit(0);
-        }
-        serverIp = confirmedIp;
         setTitle("Login - Gestor de Cámaras");
         setSize(350, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -386,13 +395,13 @@ public class LoginFrame extends JFrame {
                     // Manejar la interfaz según el rol
                     if (rol.equalsIgnoreCase("OPERADOR")) {
                         SwingUtilities.invokeLater(() -> {
-                            ClienteSwingUI cliente = new ClienteSwingUI(usuario, sessionCookie);
+                            ClienteSwingUI cliente = new ClienteSwingUI(usuario, sessionCookie, serverIp);
                             cliente.setVisible(true);
                             dispose();
                         });
                     } else if (rol.equalsIgnoreCase("VISUALIZADOR")) {
                         SwingUtilities.invokeLater(() -> {
-                            VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie);
+                            VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie, serverIp);
                             visualizador.setVisible(true);
                             dispose();
                         });
