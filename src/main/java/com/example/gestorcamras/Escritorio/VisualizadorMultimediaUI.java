@@ -488,29 +488,13 @@ public class VisualizadorMultimediaUI extends JFrame {
                         // Actualizar la interfaz en el hilo de eventos de Swing
                         SwingUtilities.invokeLater(() -> {
                             archivosActuales = archivos;
-                            // Limpiar el panel de multimedia
-                            panelMultimedia.removeAll();
-                            panelMultimedia.revalidate();
-                            panelMultimedia.repaint();
-                            
                             if (!archivosActuales.isEmpty()) {
                                 indiceActual = 0;
                                 mostrarArchivoActual();
                             } else {
-                                // Mostrar mensaje de que no hay archivos
-                                JLabel mensaje = new JLabel("No se encontraron archivos multimedia para esta cámara", JLabel.CENTER);
-                                mensaje.setFont(new Font("Arial", Font.PLAIN, 16));
-                                panelMultimedia.add(mensaje, BorderLayout.CENTER);
+                                lblImagen.setText("No se encontraron archivos multimedia");
                                 lblInfo.setText("");
-                                
-                                // Actualizar la interfaz
-                                panelMultimedia.revalidate();
-                                panelMultimedia.repaint();
                             }
-                            
-                            // Actualizar estado de los botones
-                            btnAnterior.setEnabled(false);
-                            btnSiguiente.setEnabled(false);
                         });
                         
                     } else {

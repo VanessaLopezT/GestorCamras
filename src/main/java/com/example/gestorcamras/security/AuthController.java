@@ -60,11 +60,11 @@ public class AuthController {
                                userAgent.contains("desktop");
             
             if (isDesktopApp) {
-                // Para la aplicación de escritorio, devolvemos un JSON con la información necesaria
+                // Para la aplicación de escritorio, devolvemos un JSON con el formato que espera el cliente
                 JSONObject response = new JSONObject();
+                response.put("nombreRol", usuario.getRol().getNombre().toUpperCase()); // Aseguramos mayúsculas para consistencia
                 response.put("mensaje", "Login exitoso");
                 response.put("usuario", usuario.getNombre());
-                response.put("rol", usuario.getRol().getNombre());
                 
                 return ResponseEntity.ok(response.toString());
             } else {

@@ -8,6 +8,9 @@ import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.URI;
+import java.net.CookieHandler;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -164,7 +167,7 @@ public class LoginFrame extends JFrame {
         String ip = (String) JOptionPane.showInputDialog(
             null,
             "Ingrese la dirección IP del servidor:",
-            "Configuración de conexión",
+            "Configuración de conexión - IP actual: " + (defaultIp != null ? defaultIp : "No configurada"),
             JOptionPane.QUESTION_MESSAGE,
             null,
             null,
@@ -173,7 +176,7 @@ public class LoginFrame extends JFrame {
         
         if (ip != null) {
             ip = ip.trim();
-            if (ip.isEmpty()) {
+            if (ip.isEmpty() && defaultIp != null) {
                 ip = defaultIp;
             }
         }
@@ -306,89 +309,50 @@ public class LoginFrame extends JFrame {
     private void login() {
         String usuario = tfUsuario.getText().trim();
         String password = new String(pfClave.getPassword());
-        String servidorUrl = "http://" + serverIp + ":" + DEFAULT_PORT;
         
-        // Iniciando proceso de autenticación
+        // Verificar que se haya configurado una IP de servidor
+        if (serverIp == null || serverIp.trim().isEmpty()) {
+            lbEstado.setText("Error: No se ha configurado la IP del servidor");
+            return;
+        }
+        
+        String servidorUrl = "http://" + serverIp.trim() + ":" + DEFAULT_PORT;
+        System.out.println("Intentando conectar con el servidor en: " + servidorUrl);
         
         try {
             // Validar que la URL del servidor sea accesible
+            lbEstado.setText("Conectando con el servidor en " + serverIp + "...");
             if (!isServerReachable(servidorUrl)) {
-                String errorMsg = "No se puede conectar al servidor en " + servidorUrl;
+                String errorMsg = "No se puede conectar al servidor en " + servidorUrl + ". Verifique la IP e intente nuevamente.";
                 System.err.println(errorMsg);
                 lbEstado.setText(errorMsg);
+                
+                // Volver a pedir la IP del servidor
+                String newIp = showServerIpDialog(serverIp);
+                if (newIp != null && !newIp.trim().isEmpty()) {
+                    serverIp = newIp.trim();
+                    // Reintentar el login con la nueva IP
+                    login();
+                }
                 return;
             }
-        } catch (Exception e) {
-            String errorMsg = "Error al verificar la conexión con el servidor: " + e.getMessage();
-            System.err.println(errorMsg);
-            lbEstado.setText(errorMsg);
-            return;
-        }
 
-        if (usuario.isEmpty() || password.isEmpty()) {
-            lbEstado.setText("Por favor, complete todos los campos.");
-            return;
-        }
-
-        try {
-
+            if (usuario.isEmpty() || password.isEmpty()) {
+                lbEstado.setText("Por favor, complete todos los campos.");
+                return;
+            }
+            
+            // Autenticación tradicional (mismo método que en Cliente+Servidor)
+            String params = "username=" + URLEncoder.encode(usuario, "UTF-8") + "&password=" + URLEncoder.encode(password, "UTF-8");
+            
             HttpClient client = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(10))
+                .cookieHandler(new CookieManager(null, CookiePolicy.ACCEPT_ALL))  // Aceptar todas las cookies
                 .build();
-                
-            // Primero intentar autenticación con el nuevo endpoint
-            try {
-                String jsonRequest = String.format("{\"correo\":\"%s\",\"contrasena\":\"%s\"}", 
-                        usuario.replace("\"", "\\\""), 
-                        password.replace("\"", "\\\""));
-                
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(servidorUrl + "/api/auth/login"))
-                        .header("Content-Type", "application/json")
-                        .header("Accept", "application/json")
-                        .header("User-Agent", "Java-Desktop-App")
-                        .timeout(Duration.ofSeconds(10))
-                        .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
-                        .build();
-                
-                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                int code = response.statusCode();
-                
-                if (code == 200) {
-                    // Procesar respuesta JSON
-                    JSONObject jsonResponse = new JSONObject(response.body());
-                    String nombreRol = jsonResponse.getString("rol");
-                    
-                    if (nombreRol.equalsIgnoreCase("OPERADOR")) {
-                        SwingUtilities.invokeLater(() -> {
-                            ClienteSwingUI cliente = new ClienteSwingUI(usuario, "");
-                            cliente.setVisible(true);
-                            dispose();
-                        });
-                        return;
-                    } else if (nombreRol.equalsIgnoreCase("VISUALIZADOR")) {
-                        SwingUtilities.invokeLater(() -> {
-                            VisualizadorUI visualizador = new VisualizadorUI(usuario, "");
-                            visualizador.setVisible(true);
-                            dispose();
-                        });
-                        return;
-                    } else {
-                        lbEstado.setText("Rol no autorizado: " + nombreRol);
-                        return;
-                    }
-                }
-            } catch (Exception ex) {
-                System.err.println("Error en autenticación con nuevo endpoint: " + ex.getMessage());
-                ex.printStackTrace();
-                // Continuar con el método de autenticación anterior si falla
-            }
             
-            // Método de autenticación anterior (para compatibilidad)
-            String params = "username=" + URLEncoder.encode(usuario, "UTF-8") + "&password=" + URLEncoder.encode(password, "UTF-8");
-            
-            HttpRequest request = HttpRequest.newBuilder()
+            // 1. Hacer login para obtener la cookie de sesión
+            HttpRequest loginRequest = HttpRequest.newBuilder()
                     .uri(URI.create(servidorUrl + "/login"))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("Accept", "*/*")
@@ -396,90 +360,63 @@ public class LoginFrame extends JFrame {
                     .POST(HttpRequest.BodyPublishers.ofString(params))
                     .build();
             
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            int code = response.statusCode();
+            HttpResponse<String> loginResponse = client.send(loginRequest, HttpResponse.BodyHandlers.ofString());
             
-            // Verificar si hay redirección
-            if (code == 302 || code == 200) {
-                // Obtener la cookie de sesión
-                String headerCookies = response.headers().firstValue("Set-Cookie").orElse(null);
-                if (headerCookies != null) {
-                    String sessionCookie = headerCookies.split(";")[0];
+            // Verificar si la autenticación fue exitosa (código 302 para redirección o 200)
+            if (loginResponse.statusCode() == 302 || loginResponse.statusCode() == 200) {
+                // 2. Obtener información del usuario autenticado
+                HttpRequest userRequest = HttpRequest.newBuilder()
+                        .uri(URI.create(servidorUrl + "/api/usuario/actual"))
+                        .GET()
+                        .build();
 
+                HttpResponse<String> userResponse = client.send(userRequest, HttpResponse.BodyHandlers.ofString());
+                
+                if (userResponse.statusCode() == 200) {
+                    // Procesar la respuesta del usuario
+                    JSONObject userData = new JSONObject(userResponse.body());
+                    String rol = userData.optString("rol", userData.optString("nombreRol", ""));
                     
-                    // Verificar si la cookie es válida
-                    if (sessionCookie == null || sessionCookie.trim().isEmpty()) {
-                        throw new RuntimeException("La cookie de sesión está vacía");
-                    }
+                    // Obtener la cookie de sesión para pasarla a la interfaz
+                    String sessionCookie = loginResponse.headers()
+                            .firstValue("Set-Cookie")
+                            .orElse("")
+                            .split(";")[0];
                     
-                    // Verificar rol del usuario
-                    try {
-                        HttpRequest requestUser = HttpRequest.newBuilder()
-                                .uri(URI.create(servidorUrl + "/api/usuario/actual"))
-                                .header("Cookie", sessionCookie)
-                                .GET()
-                                .build();
-
-
-                        HttpResponse<String> responseUser = client.send(requestUser, HttpResponse.BodyHandlers.ofString());
-                        int responseCode = responseUser.statusCode();
-
-                        
-                        if (responseCode == 200) {
-                            String jsonResponse = responseUser.body();
-
-                            JSONObject obj = new JSONObject(jsonResponse);
-                            String nombreRol = obj.getString("nombreRol");
-
-
-                            if (nombreRol.equalsIgnoreCase("OPERADOR")) {
-                                SwingUtilities.invokeLater(() -> {
-                                    ClienteSwingUI cliente = new ClienteSwingUI(usuario, sessionCookie);
-                                    cliente.setVisible(true);
-                                    dispose();
-                                });
-                                return; // Salir del método después de iniciar sesión exitosamente
-                            } else if (nombreRol.equalsIgnoreCase("VISUALIZADOR")) {
-                                SwingUtilities.invokeLater(() -> {
-                                    VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie);
-                                    visualizador.setVisible(true);
-                                    dispose();
-                                });
-                                return; // Salir del método después de iniciar sesión exitosamente
-                            } else {
-                                lbEstado.setText("No autorizado: El rol " + nombreRol + " no tiene acceso a esta aplicación.");
-                            }
-                        } else {
-                            lbEstado.setText("Error al obtener información del usuario. Código: " + responseCode);
-                            String errorBody = responseUser.body();
-                            if (errorBody != null && !errorBody.isEmpty()) {
-                                System.out.println("Error del servidor: " + errorBody);
-                                lbEstado.setText("Error: " + errorBody);
-                            }
-                        }
-                    } catch (Exception ex) {
-                        System.err.println("Error al obtener información del usuario: " + ex.getMessage());
-                        ex.printStackTrace();
-                        lbEstado.setText("Error al obtener información del usuario: " + ex.getMessage());
+                    // Manejar la interfaz según el rol
+                    if (rol.equalsIgnoreCase("OPERADOR")) {
+                        SwingUtilities.invokeLater(() -> {
+                            ClienteSwingUI cliente = new ClienteSwingUI(usuario, sessionCookie);
+                            cliente.setVisible(true);
+                            dispose();
+                        });
+                    } else if (rol.equalsIgnoreCase("VISUALIZADOR")) {
+                        SwingUtilities.invokeLater(() -> {
+                            VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie);
+                            visualizador.setVisible(true);
+                            dispose();
+                        });
+                    } else {
+                        lbEstado.setText("Rol no autorizado: " + rol);
                     }
-                } else {
-                    lbEstado.setText("Error: No se recibió cookie de sesión");
+                    return;  // Salir si todo fue exitoso
                 }
-            } else {
-                lbEstado.setText("Credenciales inválidas.");
             }
+            
+            // Si llegamos aquí, hubo un error en la autenticación
+            lbEstado.setText("Credenciales inválidas o error de autenticación");
+            
         } catch (Exception e) {
-            String errorMsg = "Error al iniciar sesión: " + (e.getMessage() != null ? e.getMessage() : "Error desconocido");
+            String errorMsg = "Error al iniciar sesión: " + 
+                (e.getMessage() != null ? e.getMessage() : "Error desconocido");
             System.err.println(errorMsg);
             e.printStackTrace();
             lbEstado.setText(errorMsg);
             
-            // Mostrar más detalles del error en la consola
             if (e.getCause() != null) {
                 System.err.println("Causa: " + e.getCause().getMessage());
             }
         } finally {
-            // Asegurarse de que el mensaje de error se muestre
             if (lbEstado.getText().isEmpty()) {
                 lbEstado.setText("Error desconocido al iniciar sesión");
             }
