@@ -2,6 +2,7 @@ package com.example.gestorcamras.Escritorio.websocket;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.URI;
@@ -9,6 +10,7 @@ import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -121,22 +123,44 @@ public class StompClient {
 
     public StompClient(String serverUrl, String cookieSesion, 
                       Consumer<String> logger, Consumer<JSONObject> mensajeHandler) {
-        // Construir la URL del WebSocket
-        this.cookieSesion = cookieSesion;
+        // Inicializar logger primero para asegurar que siempre tengamos un logger
         this.logger = logger != null ? logger : System.out::println;
+        
+        // Inicializar otros campos
+        this.cookieSesion = cookieSesion != null ? cookieSesion : "";
         this.mensajeHandler = mensajeHandler != null ? mensajeHandler : json -> {};
         this.clientId = "client-" + UUID.randomUUID().toString().substring(0, 8);
-
-        if (this.logger != null) {
-            this.logger.accept("Configurando WebSocket en: " + this.serverUrl);
+        
+        // Asegurarse de que la URL use ws:// o wss:// y tenga el sufijo /ws/websocket
+        if (serverUrl == null) {
+            this.logger.accept("Error: serverUrl no puede ser nulo");
+            throw new IllegalArgumentException("serverUrl no puede ser nulo");
         }
-        conectarWebSocket();
+        
+        if (serverUrl.startsWith("http://")) {
+            this.serverUrl = serverUrl.replace("http://", "ws://") + "/ws/websocket";
+        } else if (serverUrl.startsWith("https://")) {
+            this.serverUrl = serverUrl.replace("https://", "wss://") + "/ws/websocket";
+        } else if (!serverUrl.startsWith("ws://") && !serverUrl.startsWith("wss://")) {
+            this.serverUrl = "ws://" + serverUrl + "/ws/websocket";
+        } else {
+            this.serverUrl = serverUrl;
+        }
+
+        this.logger.accept("Configurando WebSocket en: " + this.serverUrl);
+        
+        try {
+            conectarWebSocket();
+        } catch (Exception e) {
+            this.logger.accept("Error al conectar WebSocket: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
      * Establece la conexión WebSocket con el servidor
      */
-    private void suscribirCanales() {
+    public void suscribirCanales() {
         // Suscribirse a los canales necesarios
         suscribir("/topic/equipos");
         suscribir("/topic/camaras");
@@ -202,15 +226,35 @@ public class StompClient {
         }, "Reconexion-WebSocket").start();
     }
 
-    private void conectarWebSocket() {
-        try {
-            logger.accept("Conectando a WebSocket en " + serverUrl);
+    private void conectarWebSocket() throws URISyntaxException {
+        if (webSocketClient != null) {
+            try {
+                webSocketClient.close();
+            } catch (Exception e) {
+                logger.accept("Error al cerrar conexión WebSocket existente: " + e.getMessage());
+            }
+            webSocketClient = null;
+        }
 
+        logger.accept("Conectando a WebSocket en " + serverUrl);
+
+        try {
             webSocketClient = new WebSocketClient(new URI(serverUrl)) {
                 @Override
                 public void onOpen(ServerHandshake handshakedata) {
                     logger.accept("Conexión WebSocket establecida con " + serverUrl);
-                    // No enviar nada aquí, esperar el mensaje 'o' del servidor
+                    
+                    // Enviar mensaje de conexión STOMP
+                    String connectMsg = STOMP_CONNECT;
+                    if (cookieSesion != null && !cookieSesion.isEmpty()) {
+                        connectMsg = "CONNECT\n" +
+                                     "accept-version:1.1,1.0\n" +
+                                     "heart-beat:10000,10000\n" +
+                                     "Cookie: JSESSIONID=" + cookieSesion + "\n\n\u0000";
+                    }
+                    
+                    logger.accept("Enviando CONNECT STOMP...");
+                    send(connectMsg);
                 }
 
                 @Override
@@ -297,6 +341,13 @@ public class StompClient {
                 }
             };
 
+            // Configurar encabezados estándar
+            webSocketClient.addHeader("User-Agent", "Java-WebSocket");
+            webSocketClient.addHeader("Accept-Encoding", "gzip, deflate, br");
+            webSocketClient.addHeader("Accept-Language", "en-US,en;q=0.9");
+            webSocketClient.addHeader("Cache-Control", "no-cache");
+            webSocketClient.addHeader("Pragma", "no-cache");
+            
             // Agregar la cookie de sesión si está disponible
             if (cookieSesion != null && !cookieSesion.isEmpty()) {
                 webSocketClient.addHeader("Cookie", "JSESSIONID=" + cookieSesion);
@@ -304,24 +355,23 @@ public class StompClient {
 
             // Conectar con timeout
             try {
-                webSocketClient.connectBlocking();
+                logger.accept("Iniciando conexión WebSocket bloqueante...");
+                boolean connected = webSocketClient.connectBlocking(10, TimeUnit.SECONDS);
+                if (!connected) {
+                    throw new IllegalStateException("Tiempo de espera agotado al conectar al WebSocket");
+                }
+                logger.accept("Conexión WebSocket establecida exitosamente");
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 logger.accept("Conexión WebSocket interrumpida");
-                return;
+                throw new RuntimeException("Conexión interrumpida", ie);
             }
 
-            // Configurar encabezados
-            webSocketClient.addHeader("Origin", "http://localhost:8080");
-
-            // Agregar encabezado de cookie si está disponible
-            if (cookieSesion != null && !cookieSesion.isEmpty()) {
-                webSocketClient.addHeader("Cookie", "JSESSIONID=" + cookieSesion);
-            }
-
-        } catch (URISyntaxException e) {
+        } catch (Exception e) {
             logger.accept("Error al conectar WebSocket: " + e.getMessage());
+            e.printStackTrace();
             reconectar();
+            throw e;
         }
     }
 
@@ -367,36 +417,65 @@ public class StompClient {
     }
 
     private void procesarMensajeSockJS(String mensaje) {
+        if (mensaje == null || mensaje.trim().isEmpty()) {
+            logger.accept("Mensaje SockJS vacío o nulo");
+            return;
+        }
+
+        logger.accept("Procesando mensaje SockJS: " + mensaje);
+
+        char tipo = mensaje.charAt(0);
+        String contenido = mensaje.length() > 1 ? mensaje.substring(1) : "";
+
         try {
-            if (mensaje == null || mensaje.trim().isEmpty()) {
-                logger.accept("Mensaje SockJS vacío o nulo");
-                return;
-            }
-
-            logger.accept("Procesando mensaje SockJS: " + mensaje);
-
-            if ("o".equals(mensaje) || 
-                mensaje.startsWith("a[\"o\"]") || 
-                mensaje.startsWith("a[\\\\\"o\\\\\"]") ||
-                mensaje.startsWith("o[")) {
-                // Mensaje de apertura de conexión SockJS
-                logger.accept("Conexión SockJS establecida");
-
-                // Resetear contador de reintentos cuando la conexión es exitosa
-                if (reintentosReconexion > 0) {
-                    logger.accept("Conexión restablecida después de " + reintentosReconexion + " intentos");
-                    reintentosReconexion = 0;
-                }
-
-                // Enviar mensaje CONNECT STOMP después de un pequeño retraso
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(100);
-                        enviarMensajeSTOMP(STOMP_CONNECT);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+            switch (tipo) {
+                case 'o': // open
+                    logger.accept("Conexión SockJS establecida");
+                    // No enviamos CONNECT aquí, ya se envía en onOpen
+                    break;
+                    
+                case 'h': // heartbeat
+                    logger.accept("Heartbeat recibido");
+                    // Responder al heartbeat para mantener la conexión viva
+                    if (webSocketClient != null && webSocketClient.isOpen()) {
+                        webSocketClient.send("h");
                     }
-                }).start();
+                    break;
+                    
+                case 'a': // array de mensajes
+                    try {
+                        // El formato es a["mensaje1", "mensaje2", ...]
+                        String jsonArrayStr = mensaje.substring(1); // Eliminar la 'a' inicial
+                        JSONArray jsonArray = new JSONArray(jsonArrayStr);
+                        for (int i = 0; i < jsonArray.length(); i++) {
+                            String mensajeStomp = jsonArray.getString(i);
+                            if (mensajeStomp != null && !mensajeStomp.trim().isEmpty()) {
+                                procesarMensajeSTOMP(mensajeStomp);
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.accept("Error al procesar array de mensajes SockJS: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                    break;
+                    
+                case 'c': // close
+                    logger.accept("Conexión SockJS cerrada: " + contenido);
+                    // Intentar reconectar
+                    if (!reconectando) {
+                        reconectar();
+                    }
+                    break;
+                    
+                case 'm': // message (no estándar, por si acaso)
+                    if (contenido != null && !contenido.trim().isEmpty()) {
+                        procesarMensajeSTOMP(contenido);
+                    }
+                    break;
+                    
+                default:
+                    logger.accept("Tipo de mensaje SockJS no reconocido: " + tipo);
+                    break;
             }
         } catch (Exception e) {
             logger.accept("Error al procesar mensaje SockJS: " + e.getMessage());

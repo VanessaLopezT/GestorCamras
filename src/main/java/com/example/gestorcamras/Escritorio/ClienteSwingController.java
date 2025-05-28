@@ -54,16 +54,46 @@ public class ClienteSwingController {
      */
     private void inicializarWebSocket() {
         try {
+            log("Inicializando conexión WebSocket con servidor: " + servidorUrl);
+            
+            // Pasamos la URL HTTP/HTTPS directamente, StompClient se encargará de la conversión a WebSocket
             stompClient = new StompClient(
-                servidorUrl,
+                servidorUrl,  // URL HTTP/HTTPS, StompClient la convertirá a WS/WSS
                 cookieSesion,
                 this::log,
                 this::procesarMensajeWebSocket
             );
-        } catch (Exception e) {
-            log("Error al inicializar STOMP WebSocket: " + e.getMessage());
+            
+            // Si el StompClient tiene un método para suscribirse a canales, lo llamamos aquí
+            if (stompClient != null) {
+                try {
+                    stompClient.suscribirCanales();
+                } catch (Exception ex) {
+                    log("Error al suscribir canales: " + ex.getMessage());
+                }
+            }
+        } catch (Exception ex) {
+            String errorMsg = "Error al inicializar STOMP WebSocket: " + 
+                          (ex.getMessage() != null ? ex.getMessage() : "Error desconocido");
+            log(errorMsg);
+            
+            // Registrar el stack trace completo para depuración
+            System.err.println("Error en inicializarWebSocket:");
+            ex.printStackTrace(System.err);
+            
+            // Programar un reintento después de un tiempo
+            final Timer timer = new Timer();
+            TimerTask task = new TimerTask() {
+                @Override
+                public void run() {
+                    log("Intentando reconexión WebSocket...");
+                    inicializarWebSocket();
+                    timer.cancel(); // Cancelar el timer después de usarlo
+                }
+            };
+            timer.schedule(task, 5000);} // Reintentar después de 5 segundos
         }
-    }
+    
     
     /**
      * Procesa los mensajes recibidos a través de WebSocket

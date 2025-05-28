@@ -489,18 +489,21 @@ public class ServidorUI extends JFrame {
     /**
      * Actualiza la interfaz con la dirección IP del servidor
      */
+    /**
+     * Actualiza la interfaz con la dirección IP del servidor
+     */
     private void actualizarDireccionIP() {
         new Thread(() -> {
             try {
                 String ip = obtenerDireccionIP();
-                String mensaje = "Dirección IP: " + ip + " (Puerto: 8080)";
+                String mensaje = "Servidor: " + ip + " (Puerto: 8080)";
                 SwingUtilities.invokeLater(() -> {
                     lblEstadoServidor.setText(mensaje);
                     log("Servidor iniciado en: http://" + ip + ":8080");
                 });
             } catch (Exception e) {
                 SwingUtilities.invokeLater(() -> {
-                    lblEstadoServidor.setText("No se pudo determinar la dirección IP");
+                    lblEstadoServidor.setText("Servidor: No se pudo determinar la IP");
                     log("Error al obtener la dirección IP: " + e.getMessage());
                 });
             }
@@ -512,70 +515,118 @@ public class ServidorUI extends JFrame {
      * @return La dirección IP local o "localhost" si no se pudo determinar
      */
     private String obtenerDireccionIP() {
+        System.out.println("Buscando interfaces de red...");
+        
+        // Primero intentamos obtener la IP de la interfaz Wi-Fi
+        String wifiIp = findInterfaceIp("Wireless", "Wi-Fi");
+        if (wifiIp != null) {
+            System.out.println("Usando IP de Wi-Fi: " + wifiIp);
+            return wifiIp;
+        }
+        
+        // Si no encontramos Wi-Fi, intentamos con Ethernet (pero no VirtualBox)
+        String ethernetIp = findInterfaceIp("Ethernet");
+        if (ethernetIp != null && !ethernetIp.startsWith("192.168.56.")) {  // Filtramos IPs de VirtualBox
+            System.out.println("Usando IP de Ethernet: " + ethernetIp);
+            return ethernetIp;
+        }
+        
+        // Si no encontramos ninguna de las anteriores, buscamos la primera IP válida
+        String firstIp = findFirstAvailableIp();
+        System.out.println("Usando primera IP disponible: " + firstIp);
+        return firstIp;
+    }
+    
+    private String findInterfaceIp(String... interfaceNames) {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                String displayName = networkInterface.getDisplayName();
+                String name = networkInterface.getName();
+                
+                // Saltar interfaces que no nos interesan
+                if (networkInterface.isLoopback() || 
+                    !networkInterface.isUp() || 
+                    displayName == null ||
+                    displayName.contains("Virtual") || 
+                    displayName.contains("VirtualBox") ||
+                    displayName.contains("WFP") || 
+                    displayName.contains("Loopback") || 
+                    displayName.contains("Teredo") ||
+                    displayName.contains("Bluetooth") || 
+                    displayName.contains("Pseudo") ||
+                    displayName.contains("Miniport") ||
+                    displayName.contains("Tunnel") ||
+                    name == null || 
+                    name.startsWith("vEthernet") ||
+                    name.startsWith("Loopback") ||
+                    name.startsWith("isatap")) {
+                    continue;
+                }
+                
+                System.out.println("Interfaz encontrada: " + displayName + " (" + name + ")");
+                
+                // Verificar si coincide con alguno de los nombres buscados
+                for (String interfaceName : interfaceNames) {
+                    if (displayName.contains(interfaceName) || name.contains(interfaceName)) {
+                        String ip = getFirstValidIpFromInterface(networkInterface);
+                        if (ip != null && !ip.startsWith("169.254") && !ip.startsWith("0.0.0.0") && !ip.startsWith("127.0.0.1")) {
+                            System.out.println("IP seleccionada de " + displayName + ": " + ip);
+                            return ip;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error al buscar interfaz: " + e.getMessage());
+        }
+        return null;
+    }
+    
+    private String findFirstAvailableIp() {
         try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
                 NetworkInterface iface = interfaces.nextElement();
-                // Ignorar interfaces que no estén activas o sean loopback
-                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || iface.isPointToPoint()) {
+                if (!iface.isUp() || iface.isLoopback() || iface.isVirtual() || iface.isPointToPoint()) {
                     continue;
                 }
-
-                Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress addr = addresses.nextElement();
-                    // Solo direcciones IPv4
-                    if (addr.isLoopbackAddress() || !(addr.getHostAddress().contains("."))) {
-                        continue;
-                    }
-                    
+                
+                String ip = getFirstValidIpFromInterface(iface);
+                if (ip != null) {
+                    return ip;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error al buscar IP disponible: " + e.getMessage());
+        }
+        return "127.0.0.1";
+    }
+    
+    private String getFirstValidIpFromInterface(NetworkInterface iface) {
+        try {
+            Enumeration<InetAddress> addresses = iface.getInetAddresses();
+            while (addresses.hasMoreElements()) {
+                InetAddress addr = addresses.nextElement();
+                if (!addr.isLoopbackAddress() && addr.getHostAddress().contains(".")) {
                     String hostAddress = addr.getHostAddress();
-                    // Verificar que sea una dirección IP privada
                     if (hostAddress.startsWith("192.168.") || 
                         hostAddress.startsWith("10.") || 
                         hostAddress.startsWith("172.16.")) {
+                        System.out.println("IP seleccionada de " + iface.getDisplayName() + ": " + hostAddress);
                         return hostAddress;
                     }
                 }
             }
-        } catch (SocketException e) {
-            log("Error al obtener la dirección IP: " + e.getMessage());
-        }
-        return "localhost";
-    }
-    
-    /**
-     * Procesa una notificación de archivo subido
-     * @param datos Datos del archivo subido
-     */
-    private void procesarArchivoSubido(JSONObject datos) {
-        if (datos == null) {
-            log("Datos de archivo subido nulos");
-            return;
-        }
-        
-        try {
-            String nombreArchivo = datos.optString("nombreArchivo", "desconocido");
-            String tipo = datos.optString("tipo", "desconocido");
-            String camara = datos.optString("camara", "desconocida");
-            long tamano = datos.optLong("tamano", 0);
-            
-            String mensaje = String.format("✅ Archivo recibido: %s\n   Tipo: %s\n   Cámara: %s\n   Tamaño: %d bytes", 
-                nombreArchivo, tipo, camara, tamano);
-                
-            log(mensaje);
-            
-            // Mostrar notificación emergente
-            mostrarNotificacion("Nuevo archivo recibido", 
-                String.format("Archivo: %s\nCámara: %s", nombreArchivo, camara));
-                
         } catch (Exception e) {
-            log("Error al procesar notificación de archivo subido: " + e.getMessage());
+            System.err.println("Error al obtener IP de la interfaz " + iface.getDisplayName() + ": " + e.getMessage());
         }
+        return null;
     }
     
     /**
-     * Muestra una notificación emergente
+     * Muestra una notificación en el sistema
      * @param titulo Título de la notificación
      * @param mensaje Mensaje a mostrar
      */
@@ -625,24 +676,31 @@ public class ServidorUI extends JFrame {
             // Agregar el ícono al system tray
             try {
                 tray.add(trayIcon);
+                
+                // Mostrar la notificación
+                trayIcon.displayMessage(titulo, mensaje, TrayIcon.MessageType.INFO);
+                
+                // Programar la eliminación del ícono después de un tiempo
+                new java.util.Timer().schedule( 
+                    new java.util.TimerTask() {
+                        @Override
+                        public void run() {
+                            tray.remove(trayIcon);
+                        }
+                    }, 
+                    5000 
+                );
+                
             } catch (AWTException e) {
                 log("Error al agregar el ícono al system tray: " + e.getMessage());
-                // Mostrar notificación de todos modos, aunque no se pueda agregar al system tray
+                // Mostrar notificación alternativa si no se pudo agregar al system tray
+                JOptionPane.showMessageDialog(
+                    this, 
+                    mensaje, 
+                    titulo, 
+                    JOptionPane.INFORMATION_MESSAGE
+                );
             }
-            
-            // Mostrar la notificación
-            trayIcon.displayMessage(titulo, mensaje, TrayIcon.MessageType.INFO);
-            
-            // Programar la eliminación del ícono después de un tiempo
-            new java.util.Timer().schedule( 
-                new java.util.TimerTask() {
-                    @Override
-                    public void run() {
-                        tray.remove(trayIcon);
-                    }
-                }, 
-                5000 
-            );
             
         } catch (Exception e) {
             log("Error al mostrar notificación: " + e.getMessage());
@@ -656,6 +714,36 @@ public class ServidorUI extends JFrame {
         }
     }
     
+    /**
+     * Procesa la notificación de un archivo subido
+     * @param datos Datos del archivo subido
+     */
+    private void procesarArchivoSubido(JSONObject datos) {
+        if (datos == null) {
+            log("Datos de archivo subido nulos");
+            return;
+        }
+        
+        String nombreArchivo = datos.optString("nombreArchivo", "archivo_desconocido");
+        String tipo = datos.optString("tipo", "desconocido");
+        long tamano = datos.optLong("tamano", 0);
+        String ruta = datos.optString("ruta", "");
+        
+        String mensaje = String.format("Archivo recibido: %s (%s, %d bytes)", 
+            nombreArchivo, tipo, tamano);
+            
+        log(mensaje);
+        
+        // Mostrar notificación al usuario
+        mostrarNotificacion("Nuevo archivo recibido", 
+            String.format("Se ha recibido el archivo: %s\nTipo: %s\nTamaño: %d bytes", 
+                nombreArchivo, tipo, tamano));
+    }
+    
+    /**
+     * Procesa una notificación de alarma recibida del servidor
+     * @param datos Datos de la alarma
+     */
     private void procesarAlarma(JSONObject datos) {
         if (datos == null) {
             log("Datos de alarma nulos");

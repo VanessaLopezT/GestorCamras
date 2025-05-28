@@ -44,15 +44,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(@NonNull StompEndpointRegistry registry) {
         // Registrar el endpoint WebSocket con soporte para SockJS
-        registry.addEndpoint("/ws") // Ruta base del endpoint WebSocket
+        registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*") // Permitir todos los orígenes
-                .setHandshakeHandler(new DefaultHandshakeHandler()) // Manejador de handshake predeterminado
-                .withSockJS() // Habilitar compatibilidad con SockJS
-                .setHeartbeatTime(10000) // Configurar el intervalo de latido a 10 segundos
-                .setSessionCookieNeeded(true) // Necesario para autenticación
-                .setWebSocketEnabled(true); // Habilitar soporte WebSocket
+                .setHandshakeHandler(new DefaultHandshakeHandler())
+                .withSockJS()
+                .setHeartbeatTime(10000)
+                .setSessionCookieNeeded(true)
+                .setWebSocketEnabled(true);
         
-        // Registrar también el endpoint sin SockJS para clientes que no lo necesiten
+        // Endpoint sin SockJS
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
                 .setHandshakeHandler(new DefaultHandshakeHandler());

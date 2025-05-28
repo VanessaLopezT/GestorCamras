@@ -14,10 +14,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.URI;
-// Importación eliminada por no ser utilizada
-import java.net.URL;
-import java.net.HttpURLConnection;
+// Importaciones de red eliminadas ya que no se utilizan
 
 @SpringBootApplication(exclude = {
     org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
@@ -37,8 +34,7 @@ public class GestorCamrasApplication {
     private static final String MODO_CLIENTE = "--cliente";
     private static final String MODO_AYUDA = "--ayuda";
     
-    // URL del servidor (para modo cliente)
-    private static String serverUrl = "http://192.168.1.9:8080";
+    // La URL del servidor ahora se maneja en LoginFrame
 
     public static void main(String[] args) {
         // Configurar para permitir la interfaz gráfica
@@ -70,27 +66,8 @@ public class GestorCamrasApplication {
                     args = new String[]{MODO_SERVIDOR};
                     break;
                 case 2: // Solo cliente
-                    String ipServidor = JOptionPane.showInputDialog(
-                        null,
-                        "Ingrese la dirección IP del servidor:",
-                        "192.168."
-                    );
-                    
-                    // Si el usuario cancela o cierra el diálogo, salir
-                    if (ipServidor == null) {
-                        System.exit(0);
-                    }
-                    
-                    // Limpiar y validar la entrada
-                    ipServidor = ipServidor.trim();
-                    
-                    // Si el usuario no ingresa nada o solo espacios, usar la IP por defecto
-                    if (ipServidor.isEmpty()) {
-                        ipServidor = "192.168.1.9";
-                    }
-                    // Asegurarse de que la IP tenga el formato correcto (sin http://)
-                    ipServidor = ipServidor.replace("http://", "").replace("https://", "");
-                    args = new String[]{MODO_CLIENTE, ipServidor};
+                    // No pedimos la IP aquí, la pedirá el LoginFrame
+                    args = new String[]{MODO_CLIENTE};
                     break;
                 case 3: // Ayuda
                     mostrarAyuda();
@@ -179,10 +156,8 @@ public class GestorCamrasApplication {
         if (args.length > 0) {
             String modo = args[0].toLowerCase();
             if (MODO_SERVIDOR.equals(modo) || MODO_CLIENTE.equals(modo) || MODO_AYUDA.equals(modo)) {
-                // Si es modo cliente, verificar si se proporcionó la IP del servidor
-                if (MODO_CLIENTE.equals(modo) && args.length > 1) {
-                    serverUrl = "http://" + args[1] + ":8080";
-                }
+                // Si es modo cliente, ya no necesitamos hacer nada especial con la IP
+                // ya que la pedirá el LoginFrame
                 return modo;
             }
         }
@@ -226,30 +201,10 @@ public class GestorCamrasApplication {
             @Override
             public void run() {
                 try {
-                    // Extraer el host y puerto de la URL del servidor
+                    // Configuración por defecto para el cliente
+                    // La IP del servidor la pedirá el LoginFrame
                     String host = "localhost";
                     int port = 8080;
-                    
-                    try {
-                        URI uri = new URI(serverUrl);
-                        host = uri.getHost();
-                        port = uri.getPort() > 0 ? uri.getPort() : 8080;
-                    } catch (Exception e) {
-                        System.err.println("Error al analizar la URL del servidor: " + e.getMessage());
-                    }
-                    
-                    // Verificar si el servidor está disponible (solo si es localhost)
-                    if (host.equals("localhost") || host.equals("127.0.0.1")) {
-                        if (!verificarServidorDisponible(30)) {
-                            JOptionPane.showMessageDialog(
-                                null, 
-                                "No se pudo conectar al servidor en " + serverUrl, 
-                                "Error de conexión", 
-                                JOptionPane.ERROR_MESSAGE
-                            );
-                            return;
-                        }
-                    }
                     
                     // Establecer propiedades del sistema para que las clases de escritorio las usen
                     System.setProperty("gestorcamras.server.host", host);
@@ -274,39 +229,8 @@ public class GestorCamrasApplication {
         });
     }
     
-    private static boolean verificarServidorDisponible(int segundosMaximos) {
-        System.out.println("Verificando conexión con el servidor en " + serverUrl + "...");
-        long tiempoInicio = System.currentTimeMillis();
-        long tiempoLimite = tiempoInicio + (segundosMaximos * 1000L);
-        
-        while (System.currentTimeMillis() < tiempoLimite) {
-            try {
-                URL url = URI.create(serverUrl + "/").toURL();
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(2000);
-                
-                int responseCode = conn.getResponseCode();
-                if (responseCode == 200) {
-                    System.out.println("¡Conexión con el servidor establecida!");
-                    return true;
-                }
-            } catch (Exception e) {
-                // El servidor aún no está listo
-            }
-            
-            try {
-                Thread.sleep(1000); // Esperar 1 segundo entre intentos
-                System.out.print(".");
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-        }
-        
-        System.out.println("\nNo se pudo conectar al servidor después de " + segundosMaximos + " segundos");
-        return false;
-    }
+    // El método verificarServidorDisponible fue eliminado ya que la verificación de conexión
+    // ahora se maneja en el LoginFrame
     
     private static void mostrarAyuda() {
         StringBuilder mensaje = new StringBuilder();

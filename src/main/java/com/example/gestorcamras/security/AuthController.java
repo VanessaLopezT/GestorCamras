@@ -2,21 +2,24 @@ package com.example.gestorcamras.security;
 
 import com.example.gestorcamras.dto.UsuarioDTO;
 import com.example.gestorcamras.model.Rol;
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import com.example.gestorcamras.model.Usuario;
+import com.example.gestorcamras.repository.RolRepository;
+import com.example.gestorcamras.repository.UsuarioRepository;
+
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import com.example.gestorcamras.model.Usuario;
-import com.example.gestorcamras.repository.RolRepository;
-import com.example.gestorcamras.repository.UsuarioRepository;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDateTime;
 
@@ -38,11 +41,39 @@ public class AuthController {
     private RolRepository rolRepository;
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody AuthRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getCorreo(), request.getContrasena()));
-
-        return ResponseEntity.ok("Login exitoso"); // eventualmente aquí devuelves JWT
+    public ResponseEntity<?> login(@RequestBody AuthRequest request, HttpServletRequest httpRequest) {
+        try {
+            // Autenticar al usuario
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getCorreo(), request.getContrasena()));
+            
+            // Obtener el usuario
+            Usuario usuario = usuarioRepository.findByCorreo(request.getCorreo())
+                    .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                    
+            // Verificar si es una solicitud de la aplicación de escritorio
+            String userAgent = httpRequest.getHeader("User-Agent") != null ? 
+                    httpRequest.getHeader("User-Agent").toLowerCase() : "";
+                    
+            boolean isDesktopApp = userAgent.contains("java") || 
+                               userAgent.contains("javafx") || 
+                               userAgent.contains("desktop");
+            
+            if (isDesktopApp) {
+                // Para la aplicación de escritorio, devolvemos un JSON con la información necesaria
+                JSONObject response = new JSONObject();
+                response.put("mensaje", "Login exitoso");
+                response.put("usuario", usuario.getNombre());
+                response.put("rol", usuario.getRol().getNombre());
+                
+                return ResponseEntity.ok(response.toString());
+            } else {
+                // Para la aplicación web, redirigir al dashboard
+                return ResponseEntity.ok("Login exitoso");
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Credenciales inválidas");
+        }
     }
 
     @PostMapping("/register")

@@ -52,6 +52,7 @@ public class SecurityConfig {
             "/css/**", "/js/**", "/images/**", "/webjars/**",
             "/api/auth/**",
             // WebSocket endpoints
+            "/ws",
             "/ws/**",
             "/ws/websocket/**",
             "/topic/**",
@@ -79,7 +80,7 @@ public class SecurityConfig {
                 // Deshabilitar CSRF para endpoints específicos
                 .csrf(csrf -> csrf
                     .ignoringRequestMatchers(
-                        "/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", 
+                        "/ws", "/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", 
                         "/app/**", "/user/queue/**", "/sockjs/**"
                     )
                     .ignoringRequestMatchers(
@@ -90,17 +91,6 @@ public class SecurityConfig {
                     .ignoringRequestMatchers("/login")
                 )
                 // Habilitar CORS para todos los orígenes
-                .cors(cors -> cors.configurationSource(request -> {
-                    var corsConfig = new org.springframework.web.cors.CorsConfiguration();
-                    corsConfig.setAllowedOrigins(java.util.List.of("*"));
-                    corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-                    corsConfig.setAllowedHeaders(java.util.List.of("*"));
-                    corsConfig.setExposedHeaders(java.util.List.of("Authorization", "Cache-Control", "Content-Type"));
-                    corsConfig.setAllowCredentials(true);
-                    corsConfig.setMaxAge(3600L);
-                    return corsConfig;
-                }))
-                // Configuración CORS
                 .cors(cors -> cors.configurationSource(request -> {
                     var corsConfig = new org.springframework.web.cors.CorsConfiguration();
                     corsConfig.setAllowedOrigins(java.util.List.of("*"));
@@ -152,13 +142,6 @@ public class SecurityConfig {
                           .contentSecurityPolicy(csp -> csp
                               .policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:;")
                           );
-                })
-                // Configuración para WebSocket
-                .sessionManagement(session -> {
-                    session.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
-                          .sessionFixation().migrateSession()
-                          .maximumSessions(1)
-                          .expiredUrl("/login?expired");
                 })
                 .build();
     }

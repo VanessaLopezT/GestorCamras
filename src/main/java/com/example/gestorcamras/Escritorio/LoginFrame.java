@@ -14,6 +14,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Enumeration;
+
+import org.json.JSONObject;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -41,33 +43,114 @@ public class LoginFrame extends JFrame {
      */
     private String getLocalIpAddress() {
         try {
+            System.out.println("Buscando interfaces de red...");
+            
+            // Primero intentamos obtener la IP de la interfaz Wi-Fi
+            String wifiIp = findInterfaceIp("Wireless", "Wi-Fi");
+            if (wifiIp != null) {
+                System.out.println("Usando IP de Wi-Fi: " + wifiIp);
+                return wifiIp;
+            }
+            
+            // Si no encontramos Wi-Fi, intentamos con Ethernet (pero no VirtualBox)
+            String ethernetIp = findInterfaceIp("Ethernet");
+            if (ethernetIp != null && !ethernetIp.startsWith("192.168.56.")) {  // Filtramos IPs de VirtualBox
+                System.out.println("Usando IP de Ethernet: " + ethernetIp);
+                return ethernetIp;
+            }
+            
+            // Si no encontramos ninguna de las anteriores, buscamos la primera IP válida
+            String firstIp = findFirstAvailableIp();
+            System.out.println("Usando primera IP disponible: " + firstIp);
+            return firstIp;
+        } catch (Exception e) {
+            System.err.println("Error al obtener la IP local: " + e.getMessage());
+            e.printStackTrace();
+            return "127.0.0.1";
+        }
+    }
+    
+    private String findInterfaceIp(String... interfaceNames) {
+        try {
             Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
             while (interfaces.hasMoreElements()) {
-                NetworkInterface iface = interfaces.nextElement();
-                // Ignorar interfaces que no estén activas o sean loopback
-                if (iface.isLoopback() || !iface.isUp() || iface.isVirtual() || iface.isPointToPoint()) {
+                NetworkInterface networkInterface = interfaces.nextElement();
+                String displayName = networkInterface.getDisplayName();
+                String name = networkInterface.getName();
+                
+                // Saltar interfaces que no nos interesan
+                if (networkInterface.isLoopback() || 
+                    !networkInterface.isUp() || 
+                    displayName == null ||
+                    displayName.contains("Virtual") || 
+                    displayName.contains("VirtualBox") ||
+                    displayName.contains("WFP") || 
+                    displayName.contains("Loopback") || 
+                    displayName.contains("Teredo") ||
+                    displayName.contains("Bluetooth") || 
+                    displayName.contains("Pseudo") ||
+                    displayName.contains("Miniport") ||
+                    displayName.contains("Tunnel") ||
+                    displayName.contains("Pseudo") ||
+                    name == null || 
+                    name.startsWith("vEthernet") ||
+                    name.startsWith("Loopback") ||
+                    name.startsWith("isatap")) {
                     continue;
                 }
-
-                Enumeration<InetAddress> addresses = iface.getInetAddresses();
-                while (addresses.hasMoreElements()) {
-                    InetAddress addr = addresses.nextElement();
-                    // Solo direcciones IPv4
-                    if (addr.isLoopbackAddress() || !(addr.getHostAddress().contains("."))) {
-                        continue;
-                    }
-                    
-                    String hostAddress = addr.getHostAddress();
-                    // Verificar que sea una dirección IP privada
-                    if (hostAddress.startsWith("192.168.") || 
-                        hostAddress.startsWith("10.") || 
-                        hostAddress.startsWith("172.16.")) {
-                        return hostAddress;
+                
+                System.out.println("Interfaz encontrada: " + displayName + " (" + name + ")");
+                
+                // Verificar si coincide con alguno de los nombres buscados
+                for (String interfaceName : interfaceNames) {
+                    if (displayName.contains(interfaceName) || name.contains(interfaceName)) {
+                        String ip = getFirstValidIpFromInterface(networkInterface);
+                        if (ip != null && !ip.startsWith("169.254") && !ip.startsWith("0.0.0.0") && !ip.startsWith("127.0.0.1")) {
+                            System.out.println("IP seleccionada de " + displayName + ": " + ip);
+                            return ip;
+                        }
                     }
                 }
             }
-        } catch (SocketException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            System.err.println("Error al buscar interfaz: " + e.getMessage());
+        }
+        return null;
+    }
+    
+    private String findFirstAvailableIp() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface iface = interfaces.nextElement();
+                if (!iface.isUp() || iface.isLoopback() || iface.isVirtual() || iface.isPointToPoint()) {
+                    continue;
+                }
+                
+                String ip = getFirstValidIpFromInterface(iface);
+                if (ip != null) {
+                    return ip;
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Error al buscar IP disponible: " + e.getMessage());
+        }
+        return "127.0.0.1";
+    }
+    
+    private String getFirstValidIpFromInterface(NetworkInterface iface) {
+        Enumeration<InetAddress> addresses = iface.getInetAddresses();
+        while (addresses.hasMoreElements()) {
+            InetAddress addr = addresses.nextElement();
+            if (!addr.isLoopbackAddress() && addr.getHostAddress().contains(".")) {
+                String hostAddress = addr.getHostAddress();
+                if (hostAddress.startsWith("192.168.") || 
+                    hostAddress.startsWith("10.") || 
+                    hostAddress.startsWith("172.16.")) {
+                    System.out.println("IP seleccionada de " + iface.getDisplayName() + ": " + hostAddress);
+                    return hostAddress;
+                }
+            }
         }
         return null;
     }
@@ -254,8 +337,56 @@ public class LoginFrame extends JFrame {
                 .connectTimeout(Duration.ofSeconds(10))
                 .build();
                 
+            // Primero intentar autenticación con el nuevo endpoint
+            try {
+                String jsonRequest = String.format("{\"correo\":\"%s\",\"contrasena\":\"%s\"}", 
+                        usuario.replace("\"", "\\\""), 
+                        password.replace("\"", "\\\""));
+                
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(servidorUrl + "/api/auth/login"))
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .header("User-Agent", "Java-Desktop-App")
+                        .timeout(Duration.ofSeconds(10))
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonRequest))
+                        .build();
+                
+                HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                int code = response.statusCode();
+                
+                if (code == 200) {
+                    // Procesar respuesta JSON
+                    JSONObject jsonResponse = new JSONObject(response.body());
+                    String nombreRol = jsonResponse.getString("rol");
+                    
+                    if (nombreRol.equalsIgnoreCase("OPERADOR")) {
+                        SwingUtilities.invokeLater(() -> {
+                            ClienteSwingUI cliente = new ClienteSwingUI(usuario, "");
+                            cliente.setVisible(true);
+                            dispose();
+                        });
+                        return;
+                    } else if (nombreRol.equalsIgnoreCase("VISUALIZADOR")) {
+                        SwingUtilities.invokeLater(() -> {
+                            VisualizadorUI visualizador = new VisualizadorUI(usuario, "");
+                            visualizador.setVisible(true);
+                            dispose();
+                        });
+                        return;
+                    } else {
+                        lbEstado.setText("Rol no autorizado: " + nombreRol);
+                        return;
+                    }
+                }
+            } catch (Exception ex) {
+                System.err.println("Error en autenticación con nuevo endpoint: " + ex.getMessage());
+                ex.printStackTrace();
+                // Continuar con el método de autenticación anterior si falla
+            }
+            
+            // Método de autenticación anterior (para compatibilidad)
             String params = "username=" + URLEncoder.encode(usuario, "UTF-8") + "&password=" + URLEncoder.encode(password, "UTF-8");
-
             
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(servidorUrl + "/login"))
@@ -265,13 +396,8 @@ public class LoginFrame extends JFrame {
                     .POST(HttpRequest.BodyPublishers.ofString(params))
                     .build();
             
-
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
             int code = response.statusCode();
-
-            
-
             
             // Verificar si hay redirección
             if (code == 302 || code == 200) {
