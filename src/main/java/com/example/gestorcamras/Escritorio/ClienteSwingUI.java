@@ -104,7 +104,7 @@ public class ClienteSwingUI extends JFrame {
         equipoIdLabel = new JLabel("ID Equipo: Generando...");
         panelArriba.add(equipoIdLabel);
 
-        JButton btnCargarCamaras = new JButton("Cargar cámara");
+        JButton btnCargarCamaras = new JButton("Cargar cámaras");
         btnCargarCamaras.addActionListener(e -> cargarCamaras());
         panelArriba.add(btnCargarCamaras);
 

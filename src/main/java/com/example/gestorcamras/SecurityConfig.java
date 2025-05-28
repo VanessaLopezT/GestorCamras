@@ -51,6 +51,7 @@ public class SecurityConfig {
             "/", "/login", "/error", 
             "/css/**", "/js/**", "/images/**", "/webjars/**",
             "/api/auth/**",
+            // WebSocket endpoints
             "/ws/**",
             "/ws/websocket/**",
             "/topic/**",
@@ -58,6 +59,9 @@ public class SecurityConfig {
             "/app/**",
             "/user/queue/**",
             "/sockjs/**",
+            "/user/**",
+            "/actuator/**",
+            // API endpoints
             "/api/equipos",
             "/api/equipos/registrar",
             "/api/equipos/ip/**",

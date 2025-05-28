@@ -60,38 +60,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(@NonNull ChannelRegistration registration) {
-        // Configurar el canal de entrada de mensajes
+        // Configuración simplificada sin autenticación
         registration.interceptors(new ChannelInterceptor() {
             @Override
             public Message<?> preSend(@NonNull Message<?> message, @NonNull MessageChannel channel) {
-                // Interceptar mensajes entrantes
+                // Solo registrar la conexión para depuración
                 StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
-                
-                // Obtener el comando de manera segura
                 StompCommand command = accessor.getCommand();
-                if (command == null) {
-                    return message; // Ignorar mensajes sin comando
+                if (command != null) {
+                    System.out.println("Comando WebSocket: " + command + " - Sesión: " + accessor.getSessionId());
                 }
-                
-                // Registrar eventos de conexión/desconexión
-                String sessionId = accessor.getSessionId();
-                switch (command) {
-                    case CONNECT:
-                        System.out.println("Cliente conectado: " + sessionId);
-                        break;
-                    case DISCONNECT:
-                        System.out.println("Cliente desconectado: " + sessionId);
-                        break;
-                    case SUBSCRIBE:
-                        String destination = accessor.getDestination();
-                        System.out.println("Nueva suscripción: " + destination + 
-                                         " (Sesión: " + sessionId + ")");
-                        break;
-                    default:
-                        // No se requiere acción para otros comandos
-                        break;
-                }
-                
                 return message;
             }
         });
