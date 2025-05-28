@@ -154,7 +154,7 @@ public class MapaCamarasPanel extends JPanel {
                     mapViewer.setAddressLocation(center);
                     
                     // Always use zoom level 7
-                    mapViewer.setZoom(6);
+                    mapViewer.setZoom(10);
                 }
             }
             

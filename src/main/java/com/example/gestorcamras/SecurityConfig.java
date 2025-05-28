@@ -63,6 +63,8 @@ public class SecurityConfig {
             "/api/equipos/ip/**",
             "/api/equipos/*/camaras",
             "/api/camaras/equipo/*",
+            "/api/camaras",
+            "/api/camaras/**",
             "/api/equipos/*/archivos",
             "/api/camaras/*/archivos",
             "/api/archivos/**",

@@ -4,6 +4,7 @@ import com.example.gestorcamras.Escritorio.VisualizadorMultimediaUI;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.example.gestorcamras.Escritorio.DialogoCrearCamara;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -87,12 +88,80 @@ public class ServidorUI extends JFrame {
         listaEquipos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         listaEquipos.addListSelectionListener(this::seleccionarEquipo);
         
+        // Panel de botones
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        
         // Botón para actualizar la lista de equipos
         JButton btnActualizar = new JButton("Actualizar");
         btnActualizar.addActionListener(e -> cargarEquipos());
         
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Botón para agregar cámara
+        JButton btnAgregarCamara = new JButton("Agregar Cámara");
+        btnAgregarCamara.addActionListener(e -> {
+            int selectedIndex = listaEquipos.getSelectedIndex();
+            if (selectedIndex >= 0) {
+                String selected = modeloListaEquipos.getElementAt(selectedIndex);
+                try {
+                    // Obtener el ID y nombre del equipo seleccionado
+                    long equipoId = -1;
+                    String equipoNombre = "";
+                    try {
+                        // Buscar el patrón "ID: X" en el texto seleccionado
+                        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("ID: (\\d+)");
+                        java.util.regex.Matcher matcher = pattern.matcher(selected);
+                        
+                        if (matcher.find()) {
+                            // Extraer solo la parte numérica del ID
+                            String idStr = matcher.group(1);
+                            equipoId = Long.parseLong(idStr);
+                            
+                            // Extraer el nombre del equipo (todo antes de "ID:")
+                            int idIndex = selected.indexOf("ID:");
+                            if (idIndex > 0) {
+                                equipoNombre = selected.substring(0, idIndex).trim();
+                            } else {
+                                equipoNombre = "Equipo " + equipoId;
+                            }
+                        } else {
+                            // Si no se encuentra el patrón, intentar extraer el ID de otra manera
+                            int startIndex = selected.lastIndexOf("(") + 1;
+                            int endIndex = selected.indexOf(")", startIndex);
+                            if (startIndex > 0 && endIndex > startIndex) {
+                                equipoId = Long.parseLong(selected.substring(startIndex, endIndex).replaceAll("[^0-9]", ""));
+                                equipoNombre = selected.substring(0, startIndex - 1).trim();
+                            } else {
+                                throw new NumberFormatException("Formato de ID no reconocido");
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log("Error al obtener el ID o nombre del equipo: " + ex.getMessage());
+                        JOptionPane.showMessageDialog(this, 
+                            "Error al obtener la información del equipo: " + ex.getMessage(), 
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                    
+                    // Mostrar diálogo para crear nueva cámara
+                    DialogoCrearCamara dialogo = new DialogoCrearCamara(this, equipoId, equipoNombre, this);
+                    dialogo.setVisible(true);
+                } catch (Exception ex) {
+                    log("Error al obtener ID del equipo: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(this, 
+                        "Error al obtener el ID del equipo seleccionado.", 
+                        "Error", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Por favor, seleccione un equipo primero.", 
+                    "Selección requerida", 
+                    JOptionPane.WARNING_MESSAGE);
+            }
+        });
+        
         panelBotones.add(btnActualizar);
+        panelBotones.add(btnAgregarCamara);
         
         panelListaEquipos.add(panelBotones, BorderLayout.NORTH);
         panelListaEquipos.add(new JScrollPane(listaEquipos), BorderLayout.CENTER);
@@ -886,7 +955,7 @@ public class ServidorUI extends JFrame {
         log("Tabla de cámaras actualizada con " + camaras.length() + " cámaras");
     }
     
-    private void cargarCamaras(long equipoId) {
+    public void cargarCamaras(long equipoId) {
         log("Iniciando carga de cámaras para el equipo ID: " + equipoId);
         
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
