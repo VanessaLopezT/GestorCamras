@@ -75,8 +75,6 @@ public class ClienteSwingController {
     
     private void inicializarWebSocket() {
         try {
-            log("Inicializando conexión WebSocket con servidor: " + servidorUrl);
-            
             // Cancelar cualquier intento de reconexión pendiente
             if (reconnectTimer != null) {
                 reconnectTimer.cancel();
@@ -86,7 +84,7 @@ public class ClienteSwingController {
             // Resetear contador de reintentos
             reconnectAttempts = 0;
             
-            // Pasamos la URL HTTP/HTTPS directamente, StompClient se encargará de la conversión a WebSocket
+            // Pasamos la URL HTTP/HTTPS directamente, StompClient se encargará de la conversión a WS/WSS
             stompClient = new StompClient(
                 servidorUrl,  // URL HTTP/HTTPS, StompClient la convertirá a WS/WSS
                 cookieSesion,
@@ -98,32 +96,18 @@ public class ClienteSwingController {
             if (stompClient != null) {
                 try {
                     stompClient.suscribirCanales();
-                    log("Conexión WebSocket establecida correctamente con el servidor");
                     
                     // Notificar a los consumidores de estado de conexión
                     if (connectionStatusConsumer != null) {
                         connectionStatusConsumer.accept(true);
                     }
                 } catch (Exception ex) {
-                    String errorMsg = "Error al suscribir canales: " + ex.getMessage();
-                    log(errorMsg);
-                    System.err.println(errorMsg);
-                    ex.printStackTrace(System.err);
-                    
-                    // Intentar reconectar
+                    // Intentar reconectar en caso de error
                     scheduleReconnect();
                 }
             }
         } catch (Exception ex) {
-            String errorMsg = "Error al inicializar STOMP WebSocket: " + 
-                          (ex.getMessage() != null ? ex.getMessage() : "Error desconocido");
-            log(errorMsg);
-            
-            // Registrar el stack trace completo para depuración
-            System.err.println("Error en inicializarWebSocket:");
-            ex.printStackTrace(System.err);
-            
-            // Intentar reconectar
+            // Intentar reconectar en caso de error
             scheduleReconnect();
         }
     }
@@ -133,7 +117,7 @@ public class ClienteSwingController {
      */
     private void scheduleReconnect() {
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            log("Se alcanzó el número máximo de intentos de reconexión (" + MAX_RECONNECT_ATTEMPTS + "). No se intentará reconectar automáticamente.");
+            log("No se pudo reconectar después de " + MAX_RECONNECT_ATTEMPTS + " intentos");
             if (connectionStatusConsumer != null) {
                 connectionStatusConsumer.accept(false);
             }
@@ -143,9 +127,6 @@ public class ClienteSwingController {
         // Calcular el tiempo de espera con retroceso exponencial
         long delay = INITIAL_RECONNECT_DELAY * (long)Math.pow(2, reconnectAttempts);
         reconnectAttempts++;
-        
-        log(String.format("Intentando reconexión %d de %d en %d ms...", 
-            reconnectAttempts, MAX_RECONNECT_ATTEMPTS, delay));
         
         // Programar el reintento
         reconnectTimer = new Timer("WebSocketReconnectTimer", true);

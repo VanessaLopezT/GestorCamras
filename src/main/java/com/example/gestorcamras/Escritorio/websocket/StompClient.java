@@ -47,12 +47,10 @@ public class StompClient {
      */
     private void enviarMensajeSTOMP(String mensaje) {
         if (webSocketClient == null || !webSocketClient.isOpen()) {
-            String errorMsg = "[WebSocket] No se puede enviar mensaje: WebSocket no conectado";
+            String errorMsg = "Error: No se puede enviar mensaje - WebSocket no conectado";
             logger.accept(errorMsg);
-            System.err.println(errorMsg);
             // Intentar reconectar si no estamos en medio de una reconexión
             if (!reconectando) {
-                logger.accept("[WebSocket] Intentando reconexión automática...");
                 reconectar();
             }
             return;
@@ -65,8 +63,6 @@ public class StompClient {
             // Para mensajes STOMP, no usamos el formato SockJS
             if (mensaje.startsWith("CONNECT") || mensaje.startsWith("SUBSCRIBE") || 
                 mensaje.startsWith("UNSUBSCRIBE") || mensaje.startsWith("SEND")) {
-                logger.accept("Enviando mensaje STOMP directo: " + 
-                    mensajeCompleto.trim().replace("\n", "\\n"));
                 webSocketClient.send(mensajeCompleto);
                 return;
             }
@@ -296,82 +292,71 @@ public class StompClient {
 
                 @Override
                 public void onMessage(String message) {
-                    logger.accept("[WebSocket] Mensaje recibido: " + message);
-                    procesarMensajeSockJS(message);
+                    // Solo procesar el mensaje si no está vacío
+                    if (message != null && !message.trim().isEmpty()) {
+                        procesarMensajeSockJS(message);
+                    }
                 }
 
                 @Override
                 public void onMessage(ByteBuffer bytes) {
                     try {
                         if (bytes == null || bytes.remaining() == 0) {
-                            logger.accept("Mensaje binario vacío recibido");
                             return;
                         }
-
+                        
+                        // Hacer una copia del buffer para no modificar el original
+                        ByteBuffer buffer = bytes.duplicate();
+                        
                         // Verificar si es un mensaje de control SockJS (primer byte)
-                        if (bytes.remaining() == 1) {
-                            byte controlByte = bytes.get();
+                        if (buffer.remaining() == 1) {
+                            byte controlByte = buffer.get();
                             if (controlByte == 'o' || controlByte == 'h' || controlByte == 'c') {
                                 String msg = String.valueOf((char)controlByte);
-                                if (controlByte == 'c') {
+                                if (controlByte == 'c' && buffer.hasRemaining()) {
                                     // Mensaje de cierre SockJS
-                                    msg += new String(bytes.array(), bytes.position(), bytes.remaining(), StandardCharsets.UTF_8);
+                                    byte[] remaining = new byte[buffer.remaining()];
+                                    buffer.get(remaining);
+                                    msg += new String(remaining, StandardCharsets.UTF_8);
                                 }
                                 procesarMensajeSockJS(msg);
                                 return;
                             }
+                            // Restablecer la posición si no era un mensaje de control
+                            buffer.rewind();
                         }
-
-
-                        // Intentar decodificar como texto
-                        bytes.mark();
+                        
+                        // Procesar mensajes STOMP
                         try {
-                            String message = StandardCharsets.UTF_8.decode(bytes).toString();
-                            logger.accept("Mensaje binario convertido a texto: " + message);
-                            procesarMensajeSockJS(message);
+                            String message = StandardCharsets.UTF_8.decode(buffer).toString();
+                            if (!message.trim().isEmpty()) {
+                                procesarMensajeSockJS(message);
+                            }
                         } catch (Exception e) {
-                            // Si falla, tratar como binario puro
-                            bytes.reset();
-                            logger.accept("Mensaje binario recibido (" + bytes.remaining() + " bytes)");
-                            // Aquí podrías manejar mensajes binarios puros si es necesario
+                            // Si falla la decodificación, ignorar el mensaje
                         }
                     } catch (Exception e) {
-                        logger.accept("Error procesando mensaje binario: " + e.getMessage());
-                        e.printStackTrace();
+                        // Manejar cualquier otra excepción
                     }
                 }
 
-                @Override
                 public void onClose(int code, String reason, boolean remote) {
-                    String mensajeCierre = String.format(
-                        "[WebSocket] Conexión cerrada. Código: %d, Razón: %s, Remoto: %b", 
-                        code, reason, remote);
-                    logger.accept(mensajeCierre);
-                    
                     // Intentar reconectar si no fue un cierre intencional
-                    if (code != 1000) { // 1000 = cierre normal
+                    if (code != 1000 && !reconectando) {  // 1000 = cierre normal
                         reconectar();
                     }
                 }
 
+
                 @Override
                 public void onError(Exception ex) {
-                    String errorMsg = "[WebSocket] Error: " + ex.getMessage();
-                    logger.accept(errorMsg);
-                    
-                    // No imprimir el stack trace completo para errores de conexión comunes
-                    if (!(ex instanceof java.net.ConnectException || 
-                          ex instanceof java.net.UnknownHostException)) {
-                        ex.printStackTrace();
-                    }
-                    
                     // Intentar reconectar en caso de error
                     if (!reconectando) {
                         reconectar();
                     }
                 }
             };
-
+            
             // Configurar encabezados estándar
             webSocketClient.addHeader("User-Agent", "Java-WebSocket");
             webSocketClient.addHeader("Accept-Encoding", "gzip, deflate, br");
@@ -419,11 +404,11 @@ public class StompClient {
             }
             
         } catch (URISyntaxException e) {
-            String errorMsg = "[WebSocket] URL inválida: " + e.getMessage();
+            String errorMsg = "Error en la URL del WebSocket: " + e.getMessage();
             logger.accept(errorMsg);
             throw new IllegalArgumentException(errorMsg, e);
         } catch (Exception e) {
-            String errorMsg = "[WebSocket] Error inesperado: " + e.getMessage();
+            String errorMsg = "Error inesperado en WebSocket: " + e.getMessage();
             logger.accept(errorMsg);
             
             // Intentar reconectar si es un error de conexión
