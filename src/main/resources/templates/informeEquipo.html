@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>Informe de Equipo - Gestor de Cámaras</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-dark: #0a192f;
+            --primary-medium: #172a45;
+            --primary-light: #2a3a5c;
+            --accent: #64ffda;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --success: #4caf50;
+            --danger: #f44336;
+            --warning: #ff9800;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--primary-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .header h1 {
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: 1.5rem;
+            transition: color 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            background: var(--primary-light);
+        }
+
+        .back-btn:hover {
+            color: var(--accent);
+            background: var(--primary-light);
+            opacity: 0.9;
+        }
+
+        .report-container {
+            background: var(--primary-medium);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .informe-container {
+            color: var(--text-primary);
+        }
+
+        .informe-titulo {
+            color: var(--accent);
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .informe-fecha {
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+
+        .seccion-equipo, .seccion-camaras, .contenido-adicional {
+            margin-bottom: 2.5rem;
+            background: var(--primary-light);
+            padding: 1.5rem;
+            border-radius: 6px;
+        }
+
+        .seccion-equipo h3, .seccion-camaras h3, .contenido-adicional h3 {
+            color: var(--accent);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--accent);
+        }
+
+        .lista-equipo {
+            list-style: none;
+            padding: 0;
+        }
+
+        .lista-equipo li {
+            margin-bottom: 0.75rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .lista-equipo li strong {
+            min-width: 150px;
+            color: var(--accent);
+        }
+
+        .tabla-camaras {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: var(--primary-medium);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .tabla-camaras th, .tabla-camaras td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .tabla-camaras th {
+            background: var(--primary-dark);
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.5px;
+        }
+
+        .tabla-camaras tbody tr:hover {
+            background: rgba(100, 255, 218, 0.1);
+        }
+
+        .activa {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .inactiva {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .total-camaras {
+            margin-top: 1rem;
+            text-align: right;
+            font-style: italic;
+            color: var(--text-secondary);
+        }
+
+        .sin-camaras {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .contenido-adicional .contenido {
+            line-height: 1.8;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+
+        .report-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--primary-light);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-print {
+            background: var(--accent);
+            color: var(--primary-dark);
+        }
+
+        .btn-print:hover {
+            background: #52d3b8;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-back {
+            background: var(--primary-light);
+            color: var(--text-primary);
+        }
+
+        .btn-back:hover {
+            background: var(--primary-light);
+            opacity: 0.9;
+        }
+
+        /* Estilos para el contenedor del informe */
+        .report-container {
+            background: var(--primary-medium);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+
+        .report-header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .report-header h2 {
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .report-meta {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Estilos para secciones */
+        .report-section {
+            margin-bottom: 2.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1.5rem;
+            border-radius: 6px;
+        }
+
+        .report-section h3 {
+            color: var(--accent);
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .report-section h3 i {
+            margin-right: 0.5rem;
+        }
+
+        /* Estilos para detalles */
+        .report-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .detail-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1rem;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-item strong {
+            color: var(--accent);
+            margin-bottom: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        /* Estilos para la tabla de cámaras */
+        .camara-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .camara-table th,
+        .camara-table td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .camara-table th {
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .camara-table tbody tr:hover {
+            background: rgba(100, 255, 218, 0.1);
+        }
+
+        /* Estados */
+        .status-active {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        .status-inactive {
+            color: var(--danger);
+            font-weight: 600;
+        }
+
+        .text-muted {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        /* Botones */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin: 0.25rem;
+        }
+
+        .btn-print {
+            background: var(--accent);
+            color: var(--primary-dark);
+        }
+
+        .btn-print:hover {
+            background: #52d3b8;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-back {
+            background: var(--primary-light);
+            color: var(--text-primary);
+        }
+
+        .btn-back:hover {
+            background: var(--primary-light);
+            opacity: 0.9;
+        }
+
+        /* Estilos para impresión - Versión formal */
+        @media print {
+            @page {
+                size: A4;
+                margin: 1.5cm;
+                @top-center {
+                    content: "Informe de Equipo";
+                    font-family: Arial, sans-serif;
+                    font-size: 10pt;
+                    color: #333;
+                }
+                @bottom-center {
+                    content: "Página " counter(page) " de " counter(pages);
+                    font-family: Arial, sans-serif;
+                    font-size: 9pt;
+                    color: #666;
+                }
+            }
+            
+            body {
+                background: white !important;
+                color: #333 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                font-family: Arial, sans-serif !important;
+                font-size: 10pt !important;
+                line-height: 1.4 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            
+            /* Reset de colores y fondos */
+            * {
+                background: white !important;
+                color: #333 !important;
+                box-shadow: none !important;
+                text-shadow: none !important;
+            }
+            
+            .container {
+                width: 100% !important;
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            .report-container {
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                width: 100% !important;
+                border: none !important;
+            }
+            
+            /* Ocultar elementos no deseados en impresión */
+            .report-actions, 
+            .back-btn, 
+            .no-print,
+            .btn,
+            .fas,
+            .fa-print,
+            .fa-arrow-left,
+            .report-actions {
+                display: none !important;
+            }
+
+            /* Estilos para secciones */
+            .report-section {
+                background: none !important;
+                padding: 0.5rem 0 !important;
+                margin: 0.5rem 0 1rem 0 !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                border: none !important;
+            }
+
+            /* Estilos para tablas */
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+                border: 1px solid #ddd !important;
+                font-size: 9pt !important;
+                table-layout: fixed !important;
+                word-wrap: break-word !important;
+                margin: 0.5rem 0 1rem 0 !important;
+                page-break-inside: avoid !important;
+            }
+
+            th, td {
+                padding: 6px 8px !important;
+                text-align: left !important;
+                vertical-align: top !important;
+                border: 1px solid #ddd !important;
+                background: white !important;
+                color: #333 !important;
+            }
+
+            th {
+                background: #f8f9fa !important;
+                color: #333 !important;
+                font-weight: bold !important;
+                border-bottom: 2px solid #333 !important;
+            }
+
+            
+            /* Estilos para estados */
+            .status-active {
+                color: #1e7e34 !important;
+                font-weight: bold !important;
+            }
+
+            .status-inactive {
+                color: #dc3545 !important;
+                font-weight: bold !important;
+            }
+            
+            /* Encabezado del informe */
+            .report-header {
+                text-align: center !important;
+                border-bottom: 2px solid #333 !important;
+                margin: 0 0 1rem 0 !important;
+                padding: 0.5rem 0 !important;
+                page-break-after: avoid !important;
+            }
+            
+            .report-header h2 {
+                color: #333 !important;
+                font-size: 14pt !important;
+                margin: 0.2rem 0 !important;
+                font-weight: bold !important;
+            }
+            
+            .report-meta {
+                color: #666 !important;
+                font-size: 9pt !important;
+                margin: 0.5rem 0 !important;
+                text-align: center !important;
+            }
+
+            /* Títulos de sección */
+            .report-section h3 {
+                color: #333 !important;
+                border-bottom: 1px solid #ddd !important;
+                font-size: 11pt !important;
+                margin: 0.5rem 0 0.3rem 0 !important;
+                padding-bottom: 0.2rem !important;
+                page-break-after: avoid !important;
+            }
+            
+            /* Elementos de detalle */
+            .detail-item {
+                margin: 0.3rem 0 !important;
+                page-break-inside: avoid !important;
+                background: white !important;
+            }
+            
+            .detail-item strong {
+                color: #333 !important;
+                font-weight: bold !important;
+            }
+            
+            /* Mejoras para la legibilidad */
+            h1, h2, h3, h4, h5, h6 {
+                color: #333 !important;
+                page-break-after: avoid !important;
+            }
+            
+            /* Manejo de saltos de página */
+            .page-break {
+                page-break-before: always !important;
+                break-before: page !important;
+            }
+            
+            /* Evitar cortes de página en elementos importantes */
+            table, tr, td, th, tbody, thead, tfoot {
+                page-break-inside: avoid !important;
+            }
+            
+            /* Estilo para enlaces */
+            a {
+                text-decoration: none !important;
+                color: #0066cc !important;
+            }
+            
+            /* Logotipo del informe */
+            .logo-print {
+                text-align: center;
+                margin-bottom: 1rem;
+            }
+            
+            .logo-print img {
+                max-width: 200px;
+                height: auto;
+            }
+            
+            /* Estilos para la lista de información del equipo */
+            .lista-equipo {
+                list-style-type: none;
+                padding: 0;
+                margin: 0 0 1rem 0;
+                line-height: 1.2 !important;
+            }
+            
+            .lista-equipo li {
+                padding: 0.1rem 0 !important;
+                margin: 0 !important;
+                border-bottom: 1px solid #eee;
+                page-break-inside: avoid !important;
+            }
+            
+            .lista-equipo li:last-child {
+                border-bottom: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a th:href="@{/ADMINISTRADOR/informes}" class="back-btn">
+            <i class="fas fa-arrow-left"></i> Volver a Informes
+        </a>
+    
+            
+            <!-- Contenido del informe generado -->
+            <div class="informe-content" th:utext="${contenidoInforme}"></div>
+
+           
+
+            <div class="report-actions">
+                <button class="btn btn-print" onclick="window.print()">
+                    <i class="fas fa-print"></i> Imprimir Informe
+                </button>
+                <a th:href="@{/ADMINISTRADOR/informes}" class="btn btn-back">
+                    <i class="fas fa-arrow-left"></i> Volver a Informes
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // Inicialización cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Página de informe de equipo cargada');
+            
+            // Agregar clases para el modo de impresión
+            window.onbeforeprint = function() {
+                document.body.classList.add('printing');
+            };
+            
+            window.onafterprint = function() {
+                document.body.classList.remove('printing');
+            };
+        });
+    </script>
+</body>
+</html>

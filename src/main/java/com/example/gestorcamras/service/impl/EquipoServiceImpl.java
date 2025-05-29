@@ -1,8 +1,10 @@
 package com.example.gestorcamras.service.impl;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.repository.CamaraRepository;
 import com.example.gestorcamras.repository.EquipoRepository;
 import com.example.gestorcamras.controller.WebSocketController;
+import com.example.gestorcamras.controller.EquipoWebSocketController;
 import com.example.gestorcamras.service.EquipoService;
 
 @Service
@@ -32,6 +35,9 @@ public class EquipoServiceImpl implements EquipoService {
     
     @Autowired
     private WebSocketController webSocketController;
+    
+    @Autowired
+    private EquipoWebSocketController equipoWebSocketController;
 
     @Override
     public List<EquipoDTO> obtenerTodos() {
@@ -71,6 +77,10 @@ public class EquipoServiceImpl implements EquipoService {
 
         try {
             Equipo guardado = equipoRepository.save(equipo);
+            
+            // Notificar a los clientes WebSocket
+            equipoWebSocketController.notifyEquipoChange(guardado, "ADD");
+            
             return convertirADTO(guardado);
         } catch (Exception e) {
             throw new RuntimeException("Error al registrar el equipo: " + e.getMessage(), e);
@@ -198,6 +208,7 @@ public class EquipoServiceImpl implements EquipoService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<Equipo> obtenerEntidadPorId(Long id) {
         return equipoRepository.findById(id);
     }

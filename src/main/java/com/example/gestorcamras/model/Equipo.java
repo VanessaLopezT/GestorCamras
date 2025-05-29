@@ -1,17 +1,17 @@
 package com.example.gestorcamras.model;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Data;
 
@@ -41,11 +41,6 @@ public class Equipo {
     @Column(nullable = false)
     private Boolean activo;
 
-    @ManyToMany
-    @JoinTable(
-        name = "equipo_camara",
-        joinColumns = @JoinColumn(name = "equipo_id"),
-        inverseJoinColumns = @JoinColumn(name = "camara_id")
-    )
-    private Set<Camara> camaras = new HashSet<>();
+    @OneToMany(mappedBy = "equipo", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Camara> camaras = new ArrayList<>();
 }

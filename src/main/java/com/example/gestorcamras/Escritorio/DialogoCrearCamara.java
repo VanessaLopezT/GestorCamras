@@ -213,9 +213,9 @@ public class DialogoCrearCamara extends JDialog {
                 // Crear objeto JSON con los datos de la cámara
                 JSONObject camaraJson = new JSONObject();
                 
-                // Generar nombre automático basado en el equipo y la fecha/hora
-                String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-                String nombreCamara = String.format("Cam_%s_%s", equipoNombre.replaceAll("\\s+", ""), timestamp);
+                // Generar nombre automático con formato corto y marca de tiempo
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                String nombreCamara = "Cámara_Local_" + timestamp;
                 
                 // Configurar valores por defecto
                 camaraJson.put("nombre", nombreCamara);

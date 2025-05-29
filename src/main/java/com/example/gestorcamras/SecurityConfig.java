@@ -9,9 +9,14 @@ import org.springframework.security.config.annotation.authentication.builders.Au
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
@@ -45,6 +50,21 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(Arrays.asList("*"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+    
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         // Lista de patrones de URL que no requieren autenticación
         String[] publicPaths = {
@@ -58,9 +78,8 @@ public class SecurityConfig {
             "/topic/**",
             "/queue/**",
             "/app/**",
-            "/user/queue/**",
-            "/sockjs/**",
             "/user/**",
+            "/sockjs/**",
             "/actuator/**",
             // API endpoints
             "/api/equipos",
@@ -77,31 +96,8 @@ public class SecurityConfig {
         };
 
         return http
-                // Deshabilitar CSRF para endpoints específicos
-                .csrf(csrf -> csrf
-                    .ignoringRequestMatchers(
-                        "/ws", "/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", 
-                        "/app/**", "/user/queue/**", "/sockjs/**"
-                    )
-                    .ignoringRequestMatchers(
-                        "/api/equipos", "/api/equipos/**",
-                        "/api/camaras", "/api/camaras/**",
-                        "/api/archivos/**"
-                    )
-                    .ignoringRequestMatchers("/login")
-                )
-                // Habilitar CORS para todos los orígenes
-                .cors(cors -> cors.configurationSource(request -> {
-                    var corsConfig = new org.springframework.web.cors.CorsConfiguration();
-                    corsConfig.setAllowedOrigins(java.util.List.of("*"));
-                    corsConfig.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-                    corsConfig.setAllowedHeaders(java.util.List.of("*"));
-                    corsConfig.setExposedHeaders(java.util.List.of("Authorization", "Cache-Control", "Content-Type"));
-                    corsConfig.setAllowCredentials(true);
-                    corsConfig.setMaxAge(3600L);
-                    return corsConfig;
-                }))
-                // Configuración de autorización
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                     // Endpoints públicos
                     .requestMatchers(publicPaths).permitAll()
@@ -112,37 +108,33 @@ public class SecurityConfig {
                     // Cualquier otra solicitud requiere autenticación
                     .anyRequest().authenticated()
                 )
-                // Configuración del formulario de login
                 .formLogin(form -> form
                     .loginPage("/login")
                     .defaultSuccessUrl("/dashboard", true)
                     .permitAll()
                 )
-                // Configuración de logout
                 .logout(logout -> logout
                     .logoutSuccessUrl("/login?logout")
                     .invalidateHttpSession(true)
                     .deleteCookies("JSESSIONID")
                     .permitAll()
                 )
-                // Configuración de la sesión
                 .sessionManagement(session -> session
                     .sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
-                    .sessionFixation().migrateSession()
+                    .sessionFixation(fixation -> fixation.migrateSession())
                     .maximumSessions(1)
                     .expiredUrl("/login?expired")
                 )
-                // Configuración de cabeceras de seguridad
-                .headers(headers -> {
-                    headers.frameOptions(frame -> frame.sameOrigin())
-                          .httpStrictTransportSecurity(hsts -> hsts
-                              .includeSubDomains(true)
-                              .maxAgeInSeconds(31536000)
-                          )
-                          .contentSecurityPolicy(csp -> csp
-                              .policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:;")
-                          );
-                })
+                .headers(headers -> headers
+                    .frameOptions(frame -> frame.sameOrigin())
+                    .httpStrictTransportSecurity(hsts -> hsts
+                        .includeSubDomains(true)
+                        .maxAgeInSeconds(31536000)
+                    )
+                    .contentSecurityPolicy(csp -> csp
+                        .policyDirectives("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:;")
+                    )
+                )
                 .build();
     }
 }

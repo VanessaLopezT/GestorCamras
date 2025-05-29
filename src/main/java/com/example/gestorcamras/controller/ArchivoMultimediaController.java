@@ -1,6 +1,5 @@
 package com.example.gestorcamras.controller;
 
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -14,6 +13,11 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.gestorcamras.dto.ArchivoMultimediaDTO;
 import com.example.gestorcamras.model.ArchivoMultimedia;
@@ -65,6 +70,7 @@ public class ArchivoMultimediaController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ArchivoMultimediaController.class);
 
     @PostMapping("/equipos/{idEquipo}/camaras/{idCamara}/archivo")
+    @Transactional
     public ResponseEntity<?> subirArchivo(
             @PathVariable Long idEquipo,
             @PathVariable Long idCamara,
@@ -182,9 +188,13 @@ public class ArchivoMultimediaController {
             // Crear registro en base de datos
             log.debug("Creando registro en la base de datos...");
             try {
+                // Obtener la ruta relativa al directorio de archivos multimedia
+                String rutaRelativa = directorioArchivos.relativize(rutaArchivo).toString();
+                log.debug("Ruta relativa del archivo: {}", rutaRelativa);
+                
                 ArchivoMultimedia archivoMultimedia = new ArchivoMultimedia();
                 archivoMultimedia.setNombreArchivo(nombreArchivo);
-                archivoMultimedia.setRutaArchivo(rutaArchivo.toString());
+                archivoMultimedia.setRutaArchivo(rutaRelativa);
                 archivoMultimedia.setTipo(ArchivoMultimedia.TipoArchivo.valueOf(tipo.toUpperCase()));
                 archivoMultimedia.setFechaCaptura(LocalDateTime.now());
                 archivoMultimedia.setFechaSubida(LocalDateTime.now());
@@ -239,16 +249,67 @@ public class ArchivoMultimediaController {
 
     @GetMapping("/equipos/{idEquipo}/archivos")
     public List<ArchivoMultimediaDTO> obtenerArchivosEquipo(@PathVariable Long idEquipo) {
-        return archivoRepository.findByEquipoIdEquipo(idEquipo).stream()
+        return archivoRepository.findByEquipoIdEquipoWithCamara(idEquipo).stream()
                 .map(this::convertirADTO)
                 .toList();
     }
 
     @GetMapping("/camaras/{idCamara}/archivos")
     public List<ArchivoMultimediaDTO> obtenerArchivosCamara(@PathVariable Long idCamara) {
-        return archivoRepository.findByCamara_IdCamara(idCamara).stream()
+        return archivoRepository.findByCamaraIdCamaraWithEquipo(idCamara).stream()
                 .map(this::convertirADTO)
                 .toList();
+    }
+
+    @GetMapping("/archivos/{id}")
+    public ResponseEntity<Resource> obtenerArchivo(@PathVariable Long id) {
+        try {
+            ArchivoMultimedia archivo = archivoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Archivo no encontrado con ID: " + id));
+            
+            Path rutaArchivo = directorioArchivos.resolve(archivo.getRutaArchivo()).normalize();
+            
+            // Verificar que el archivo existe y es legible
+            if (!Files.exists(rutaArchivo) || !Files.isReadable(rutaArchivo)) {
+                throw new RuntimeException("No se puede leer el archivo: " + rutaArchivo);
+            }
+            
+            // Determinar el tipo de contenido
+            String contentType = "application/octet-stream";
+            if (archivo.getTipo() == ArchivoMultimedia.TipoArchivo.FOTO) {
+                String nombreArchivo = archivo.getNombreArchivo().toLowerCase();
+                if (nombreArchivo.endsWith(".jpg") || nombreArchivo.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (nombreArchivo.endsWith(".png")) {
+                    contentType = "image/png";
+                } else if (nombreArchivo.endsWith(".gif")) {
+                    contentType = "image/gif";
+                }
+            } else if (archivo.getTipo() == ArchivoMultimedia.TipoArchivo.VIDEO) {
+                String nombreArchivo = archivo.getNombreArchivo().toLowerCase();
+                if (nombreArchivo.endsWith(".mp4")) {
+                    contentType = "video/mp4";
+                } else if (nombreArchivo.endsWith(".avi")) {
+                    contentType = "video/x-msvideo";
+                } else if (nombreArchivo.endsWith(".mov")) {
+                    contentType = "video/quicktime";
+                }
+            }
+            
+            // Crear el recurso
+            Resource resource = new UrlResource(rutaArchivo.toUri());
+            
+            // Construir la respuesta
+            return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + archivo.getNombreArchivo() + "\"")
+                .body(resource);
+                
+        } catch (Exception e) {
+            log.error("Error al obtener el archivo: " + e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(null);
+        }
     }
 
     private ArchivoMultimediaDTO convertirADTO(ArchivoMultimedia archivo) {

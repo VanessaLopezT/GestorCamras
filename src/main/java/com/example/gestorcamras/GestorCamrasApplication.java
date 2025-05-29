@@ -5,10 +5,11 @@ import com.example.gestorcamras.Escritorio.ServidorUI;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.Banner;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-// Importaciones eliminadas por no ser utilizadas
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,17 +17,16 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 // Importaciones de red eliminadas ya que no se utilizan
 
-@SpringBootApplication(exclude = {
-    org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration.class,
-    org.springframework.boot.autoconfigure.data.redis.RedisReactiveAutoConfiguration.class,
-    org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class
+@SpringBootApplication
+@EnableConfigurationProperties
+@ComponentScan({
+    "com.example.gestorcamras",
+    "com.example.gestorcamras.config",
+    "com.example.gestorcamras.security"
 })
+@EnableJpaRepositories("com.example.gestorcamras.repository")
+@EntityScan("com.example.gestorcamras.model")
 public class GestorCamrasApplication {
-    
-    @Bean
-    public RestTemplate restTemplate() {
-        return new RestTemplate();
-    }
     
 
     // Constantes para los modos de ejecución
@@ -44,8 +44,7 @@ public class GestorCamrasApplication {
         if (args.length == 0 || (args.length > 0 && (args[0].equals("--ayuda") || args[0].equals("-h") || args[0].equals("-?")))) {
             String[] opciones = {"Modo Completo (Servidor + Cliente)", 
                                "Solo Servidor", 
-                               "Solo Cliente", 
-                               "Ayuda"};
+                               "Solo Cliente"};
             
             int seleccion = JOptionPane.showOptionDialog(
                 null, 
@@ -69,9 +68,7 @@ public class GestorCamrasApplication {
                     // No pedimos la IP aquí, la pedirá el LoginFrame
                     args = new String[]{MODO_CLIENTE};
                     break;
-                case 3: // Ayuda
-                    mostrarAyuda();
-                    return;
+                // Removed help option
                 case JOptionPane.CLOSED_OPTION: // Si cierra el diálogo
                 default:
                     System.exit(0);

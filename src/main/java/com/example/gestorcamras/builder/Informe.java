@@ -1,5 +1,6 @@
-package com.example.gestorcamras.model;
+package com.example.gestorcamras.builder;
 
+import com.example.gestorcamras.model.Usuario;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;

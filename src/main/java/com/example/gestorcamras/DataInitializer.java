@@ -27,7 +27,6 @@ public class DataInitializer {
     public void init() {
         crearRolSiNoExiste("ADMINISTRADOR");
         crearRolSiNoExiste("OPERADOR");
-        crearRolSiNoExiste("VISUALIZADOR");
         if (usuarioRepository.findByCorreo("admin@gestor.com").isEmpty()) {
             Rol rolAdmin = rolRepository.findByNombre("ADMINISTRADOR")
                     .orElseGet(() -> {
@@ -74,32 +73,8 @@ public class DataInitializer {
         else{ 
             System.out.println("Usuario Operador ya existe");
         }
-
-        // Crear usuario visualizador por defecto
-        if (usuarioRepository.findByCorreo("vis@gestor.com").isEmpty()) {
-            Rol rolVisualizador = rolRepository.findByNombre("VISUALIZADOR")
-                    .orElseGet(() -> {
-                        Rol nuevoRol = new Rol();
-                        nuevoRol.setNombre("VISUALIZADOR");
-                        return rolRepository.save(nuevoRol);
-                    });
-
-            Usuario visualizador = new Usuario();
-            visualizador.setCorreo("vis@gestor.com");
-            visualizador.setNombre("Visualizador por defecto");
-            visualizador.setContrasena(passwordEncoder.encode("vis123"));
-            visualizador.setRol(rolVisualizador);
-            visualizador.setFechaRegistro(LocalDateTime.now());
-
-            usuarioRepository.save(visualizador);
-            Usuario visualizadorGuardado = usuarioRepository.save(visualizador);
-            System.out.println("Usuario Visualizador guardado con ID: " + visualizadorGuardado.getIdUsuario());
-        }
-        else{ 
-            System.out.println("Usuario Visualizador ya existe");
-        }
     }
-
+    
     private void crearRolSiNoExiste(String nombreRol) {
         if (rolRepository.findByNombre(nombreRol).isEmpty()) {
             Rol rol = new Rol();

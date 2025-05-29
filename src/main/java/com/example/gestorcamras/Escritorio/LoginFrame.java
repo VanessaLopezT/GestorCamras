@@ -399,12 +399,6 @@ public class LoginFrame extends JFrame {
                             cliente.setVisible(true);
                             dispose();
                         });
-                    } else if (rol.equalsIgnoreCase("VISUALIZADOR")) {
-                        SwingUtilities.invokeLater(() -> {
-                            VisualizadorUI visualizador = new VisualizadorUI(usuario, sessionCookie, serverIp);
-                            visualizador.setVisible(true);
-                            dispose();
-                        });
                     } else {
                         lbEstado.setText("Rol no autorizado: " + rol);
                     }

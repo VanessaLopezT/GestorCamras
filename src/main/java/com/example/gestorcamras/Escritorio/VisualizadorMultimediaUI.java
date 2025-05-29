@@ -5,18 +5,19 @@ import com.example.gestorcamras.Escritorio.dto.ArchivoMultimediaDTO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.file.Paths;
+import java.awt.event.*;
+import java.io.*;
+import java.net.*;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.imageio.ImageIO;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -29,6 +30,14 @@ public class VisualizadorMultimediaUI extends JFrame {
     // Método para registrar mensajes en el hilo de Swing
     private void logEnSwing(String mensaje) {
         SwingUtilities.invokeLater(() -> log(mensaje));
+    }
+    
+    private void mostrarError(String mensaje) {
+        logEnSwing("ERROR: " + mensaje);
+        JOptionPane.showMessageDialog(this, 
+            "<html><div style='width: 300px;'>" + mensaje.replace("\n", "<br>") + "</div></html>",
+            "Error", 
+            JOptionPane.ERROR_MESSAGE);
     }
     
     private Long obtenerIdCamaraSeleccionada() {
@@ -449,72 +458,47 @@ public class VisualizadorMultimediaUI extends JFrame {
                                 archivo.setRuta(archivoJson.optString("rutaArchivo", ""));
                                 archivo.setTipo(archivoJson.optString("tipo", "desconocido"));
                                 
+                                // Convertir fechas de String a LocalDateTime
                                 try {
-                                    // Convertir fechas de String a LocalDateTime
                                     DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
                                     if (archivoJson.has("fechaCaptura")) {
                                         archivo.setFechaCaptura(LocalDateTime.parse(
                                             archivoJson.getString("fechaCaptura"), formatter));
                                     }
-                                    
-                                    if (archivoJson.has("fechaSubida")) {
-                                        archivo.setFechaSubida(LocalDateTime.parse(
-                                            archivoJson.getString("fechaSubida"), formatter));
-                                    }
                                 } catch (Exception e) {
-                                    logEnSwing("Error al parsear fechas: " + e.getMessage());
-                                }
-                                
-                                // Obtener IDs de las relaciones
-                                if (archivoJson.has("camaraId")) {
-                                    archivo.setIdCamara(archivoJson.getLong("camaraId"));
-                                } else if (archivoJson.has("idCamara")) {
-                                    archivo.setIdCamara(archivoJson.getLong("idCamara"));
-                                }
-                                
-                                if (archivoJson.has("equipoId")) {
-                                    archivo.setIdEquipo(archivoJson.getLong("equipoId"));
-                                } else if (archivoJson.has("idEquipo")) {
-                                    archivo.setIdEquipo(archivoJson.getLong("idEquipo"));
+                                    logEnSwing("Error al parsear fecha: " + e.getMessage());
                                 }
                                 
                                 archivos.add(archivo);
+                                
                             } catch (Exception e) {
-                                logEnSwing("Error al procesar archivo en índice " + i + ": " + e.getMessage());
-                                e.printStackTrace();
+                                logEnSwing("Error al procesar archivo: " + e.getMessage());
                             }
                         }
                         
-                        // Actualizar la interfaz en el hilo de eventos de Swing
+                        // Actualizar la interfaz de usuario con los archivos cargados
+                        final List<ArchivoMultimediaDTO> archivosFinal = archivos;
                         SwingUtilities.invokeLater(() -> {
-                            archivosActuales = archivos;
+                            archivosActuales = archivosFinal;
                             if (!archivosActuales.isEmpty()) {
                                 indiceActual = 0;
                                 mostrarArchivoActual();
                             } else {
+                                lblImagen.setIcon(null);
                                 lblImagen.setText("No se encontraron archivos multimedia");
                                 lblInfo.setText("");
                             }
                         });
                         
-                    } else {
-                        String errorMessage = "Error al cargar archivos. Código: " + statusCode;
-                        String responseBody = response.body();
-                        logEnSwing(errorMessage);
-                        logEnSwing("Cuerpo de la respuesta: " + responseBody);
-                        
-                        // Determinar el mensaje de error más específico
-                        String mensajeUsuario = "Error al cargar archivos multimedia";
-                        if (statusCode == 401 || statusCode == 403) {
-                            mensajeUsuario = "No tiene permisos para ver estos archivos. Inicie sesión primero.";
-                        } else if (statusCode == 404) {
-                            mensajeUsuario = "No se encontraron archivos para la selección actual.";
-                        } else if (statusCode == 302) {
-                            mensajeUsuario = "Redirección inesperada. El servidor está redirigiendo la solicitud.";
-                        }
-                        
+                    } else if (statusCode == 302) {
+                        String mensajeUsuario = "Redirección inesperada. El servidor está redirigiendo la solicitud.";
                         final String mensajeFinal = mensajeUsuario + " (Código: " + statusCode + ")";
-                        
+                        SwingUtilities.invokeLater(() -> 
+                            JOptionPane.showMessageDialog(VisualizadorMultimediaUI.this, 
+                                mensajeFinal, "Error", JOptionPane.ERROR_MESSAGE));
+                    } else {
+                        String mensajeUsuario = "Error al cargar archivos. Código: " + statusCode;
+                        final String mensajeFinal = mensajeUsuario + " (Código: " + statusCode + ")";
                         SwingUtilities.invokeLater(() -> 
                             JOptionPane.showMessageDialog(VisualizadorMultimediaUI.this, 
                                 mensajeFinal, "Error", JOptionPane.ERROR_MESSAGE));
@@ -529,12 +513,6 @@ public class VisualizadorMultimediaUI extends JFrame {
                         JOptionPane.showMessageDialog(VisualizadorMultimediaUI.this, 
                             "Error al conectar con el servidor: " + e.getMessage(), 
                             "Error de conexión", JOptionPane.ERROR_MESSAGE));
-                    e.printStackTrace();
-                    
-                    SwingUtilities.invokeLater(() -> 
-                        JOptionPane.showMessageDialog(VisualizadorMultimediaUI.this, 
-                            "Error al cargar archivos multimedia: " + e.getMessage(), 
-                            "Error", JOptionPane.ERROR_MESSAGE));
                 }
                 return null;
             }
@@ -569,17 +547,16 @@ public class VisualizadorMultimediaUI extends JFrame {
                     throw new Exception("La ruta del archivo está vacía");
                 }
                 
-                // Construir la URL del archivo
+                // Construir la URL del archivo usando el nuevo endpoint
                 String urlArchivo;
                 try {
                     if (rutaArchivo.startsWith("http")) {
                         // Si ya es una URL completa, usarla directamente
                         urlArchivo = rutaArchivo;
                     } else {
-                        // Normalizar la ruta reemplazando las barras invertidas por barras normales
-                        String rutaNormalizada = rutaArchivo.replace("\\", "/");
-                        // Construir la URL completa
-                        urlArchivo = "http://localhost:8080/" + rutaNormalizada;
+                        // Usar el nuevo endpoint para obtener el archivo por su ID
+                        urlArchivo = "http://localhost:8080/api/archivos/" + archivo.getId();
+                        logEnSwing("Usando nuevo endpoint para obtener el archivo: " + urlArchivo);
                     }
                 } catch (Exception e) {
                     throw new Exception("Error al construir la URL: " + e.getMessage(), e);
@@ -608,45 +585,96 @@ public class VisualizadorMultimediaUI extends JFrame {
                     // Cargar la imagen en un hilo separado para no bloquear la interfaz
                     new Thread(() -> {
                         try {
-                            // Crear URI y URL de manera segura
-                            URI uri = new URI(urlArchivo);
+                            logEnSwing("Intentando cargar imagen desde: " + urlArchivo);
+                            
+                            // Normalizar la URL reemplazando espacios y caracteres especiales
+                            String encodedUrl = urlArchivo.replace(" ", "%20");
+                            URI uri = new URI(encodedUrl);
                             URL url = uri.toURL();
+                            
+                            logEnSwing("URL normalizada: " + url.toString());
+                            
+                            // Verificar si la URL es accesible
+                            try (java.io.InputStream testStream = url.openStream()) {
+                                logEnSwing("Conexión exitosa a la URL");
+                            } catch (Exception e) {
+                                throw new IOException("No se pudo abrir la conexión a la URL: " + e.getMessage(), e);
+                            }
+                            
+                            // Cargar la imagen
                             java.awt.Image imagenOriginal = javax.imageio.ImageIO.read(url);
                             
-                            // Redimensionar la imagen para que se ajuste al panel
-                            if (imagenOriginal != null) {
-                                int anchoPanel = panelMultimedia.getWidth();
-                                int altoPanel = panelMultimedia.getHeight();
-                                
-                                // Calcular el tamaño manteniendo la relación de aspecto
-                                int ancho = imagenOriginal.getWidth(null);
-                                int alto = imagenOriginal.getHeight(null);
-                                double relacion = Math.min(
-                                    (double) anchoPanel / ancho,
-                                    (double) altoPanel / alto
-                                ) * 0.9; // 90% del tamaño disponible para dejar margen
-                                
-                                int nuevoAncho = (int) (ancho * relacion);
-                                int nuevoAlto = (int) (alto * relacion);
-                                
-                                // Escalar la imagen
-                                java.awt.Image imagenEscalada = imagenOriginal.getScaledInstance(
-                                    nuevoAncho, nuevoAlto, java.awt.Image.SCALE_SMOOTH);
-                                
-                                // Mostrar la imagen en el hilo de Swing
-                                SwingUtilities.invokeLater(() -> {
+                            if (imagenOriginal == null) {
+                                throw new IOException("La imagen no pudo ser leída (null)");
+                            }
+                            
+                            logEnSwing(String.format("Imagen cargada: %dx%d píxeles", 
+                                imagenOriginal.getWidth(null), imagenOriginal.getHeight(null)));
+                            
+                            // Obtener dimensiones del panel
+                            int anchoPanel = Math.max(panelMultimedia.getWidth(), 100); // Mínimo 100px
+                            int altoPanel = Math.max(panelMultimedia.getHeight(), 100); // Mínimo 100px
+                            
+                            // Calcular el tamaño manteniendo la relación de aspecto
+                            int ancho = imagenOriginal.getWidth(null);
+                            int alto = imagenOriginal.getHeight(null);
+                            
+                            if (ancho <= 0 || alto <= 0) {
+                                throw new IOException("Dimensiones de imagen inválidas: " + ancho + "x" + alto);
+                            }
+                            
+                            double relacion = Math.min(
+                                (double) anchoPanel / ancho,
+                                (double) altoPanel / alto
+                            ) * 0.9; // 90% del tamaño disponible para dejar margen
+                            
+                            int nuevoAncho = Math.max(1, (int) (ancho * relacion));
+                            int nuevoAlto = Math.max(1, (int) (alto * relacion));
+                            
+                            logEnSwing(String.format("Redimensionando imagen a: %dx%d píxeles", nuevoAncho, nuevoAlto));
+                            
+                            // Crear una imagen escalada con mejor calidad
+                            java.awt.Image imagenEscalada = new java.awt.image.BufferedImage(
+                                nuevoAncho, nuevoAlto, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                            
+                            java.awt.Graphics2D g2d = ((java.awt.image.BufferedImage)imagenEscalada).createGraphics();
+                            g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, 
+                                java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                            g2d.drawImage(imagenOriginal, 0, 0, nuevoAncho, nuevoAlto, null);
+                            g2d.dispose();
+                            
+                            // Mostrar la imagen en el hilo de Swing
+                            SwingUtilities.invokeLater(() -> {
+                                try {
                                     labelImagen.setIcon(new ImageIcon(imagenEscalada));
+                                    panelMultimedia.removeAll();
                                     panelMultimedia.add(new JScrollPane(labelImagen), BorderLayout.CENTER);
                                     panelMultimedia.revalidate();
                                     panelMultimedia.repaint();
-                                });
-                            }
+                                    logEnSwing("Imagen mostrada correctamente");
+                                } catch (Exception e) {
+                                    mostrarError("Error al mostrar la imagen: " + e.getMessage());
+                                }
+                            });
+                            
                         } catch (Exception e) {
-                            logEnSwing("Error al cargar la imagen: " + e.getMessage());
+                            String errorMsg = "Error al cargar la imagen: " + e.getMessage();
+                            logEnSwing(errorMsg);
+                            e.printStackTrace();
+                            
                             SwingUtilities.invokeLater(() -> {
-                                labelImagen.setText("No se pudo cargar la imagen: " + e.getMessage());
-                                panelMultimedia.add(new JScrollPane(labelImagen), BorderLayout.CENTER);
-                                panelMultimedia.revalidate();
+                                try {
+                                    panelMultimedia.removeAll();
+                                    labelImagen.setText("<html><div style='text-align: center; color: red;'>" +
+                                        "No se pudo cargar la imagen<br>" +
+                                        "<small>" + e.getMessage() + "</small>" +
+                                        "<br><br>URL: " + urlArchivo + "</div></html>");
+                                    panelMultimedia.add(new JScrollPane(labelImagen), BorderLayout.CENTER);
+                                    panelMultimedia.revalidate();
+                                    panelMultimedia.repaint();
+                                } catch (Exception ex) {
+                                    ex.printStackTrace();
+                                }
                             });
                         }
                     }).start();
@@ -780,19 +808,11 @@ public class VisualizadorMultimediaUI extends JFrame {
                 JOptionPane.YES_NO_OPTION);
                 
             if (confirm == JOptionPane.YES_OPTION) {
-                try {
-                    // En una implementación real, aquí harías una llamada a la API para eliminar el archivo
-                    JOptionPane.showMessageDialog(this, 
-                        "Archivo eliminado exitosamente: " + archivo.getNombre(), 
-                        "Eliminación exitosa", JOptionPane.INFORMATION_MESSAGE);
-                    
-                    // Actualizar la lista de archivos
-                    cargarArchivosMultimedia();
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Error al eliminar el archivo: " + ex.getMessage(), 
-                        "Error", JOptionPane.ERROR_MESSAGE);
-                }
+                // Aquí irá la lógica de eliminación cuando sea necesario
+                JOptionPane.showMessageDialog(this,
+                    "Función de eliminación temporalmente deshabilitada",
+                    "Información",
+                    JOptionPane.INFORMATION_MESSAGE);
             }
         }
     }

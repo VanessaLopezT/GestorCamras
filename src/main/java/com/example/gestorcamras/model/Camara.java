@@ -27,7 +27,7 @@ public class Camara {
 
     private LocalDateTime fechaRegistro;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "ubicacion_id")
     private Ubicacion ubicacion;
 
