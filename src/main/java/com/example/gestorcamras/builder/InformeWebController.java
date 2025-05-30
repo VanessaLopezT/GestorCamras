@@ -1,6 +1,8 @@
 package com.example.gestorcamras.builder;
 
+import com.example.gestorcamras.model.ArchivoMultimedia;
 import com.example.gestorcamras.model.Equipo;
+import com.example.gestorcamras.repository.ArchivoMultimediaRepository;
 import com.example.gestorcamras.service.EquipoService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,10 +21,12 @@ import java.util.Optional;
 public class InformeWebController {
 
     private final EquipoService equipoService;
+    private final ArchivoMultimediaRepository archivoMultimediaRepository;
 
     @Autowired
-    public InformeWebController(EquipoService equipoService) {
+    public InformeWebController(EquipoService equipoService, ArchivoMultimediaRepository archivoMultimediaRepository) {
         this.equipoService = equipoService;
+        this.archivoMultimediaRepository = archivoMultimediaRepository;
     }
 
     @GetMapping("/informes")
@@ -66,6 +70,12 @@ public class InformeWebController {
             // Si el equipo tiene cámaras, las agregamos al informe
             if (equipo.getCamaras() != null && !equipo.getCamaras().isEmpty()) {
                 builder.conCamaras(new java.util.ArrayList<>(equipo.getCamaras()));
+            }
+            
+            // Obtener archivos multimedia del equipo
+            List<ArchivoMultimedia> archivos = archivoMultimediaRepository.findByEquipoIdEquipo(equipoId);
+            if (archivos != null && !archivos.isEmpty()) {
+                builder.conArchivosMultimedia(archivos);
             }
             
             // Construir el informe

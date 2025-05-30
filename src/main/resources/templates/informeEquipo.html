@@ -97,14 +97,14 @@
             font-style: italic;
         }
 
-        .seccion-equipo, .seccion-camaras, .contenido-adicional {
+        .seccion-equipo, .seccion-camaras, .seccion-archivos-multimedia, .contenido-adicional {
             margin-bottom: 2.5rem;
             background: var(--primary-light);
             padding: 1.5rem;
             border-radius: 6px;
         }
 
-        .seccion-equipo h3, .seccion-camaras h3, .contenido-adicional h3 {
+        .seccion-equipo h3, .seccion-camaras h3, .seccion-archivos-multimedia h3, .contenido-adicional h3 {
             color: var(--accent);
             margin-bottom: 1.5rem;
             padding-bottom: 0.5rem;
@@ -130,22 +130,25 @@
             color: var(--accent);
         }
 
-        .tabla-camaras {
+        .tabla-camaras, .tabla-archivos {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 1rem;
+            margin: 1rem 0;
             background: var(--primary-medium);
             border-radius: 6px;
             overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        .tabla-camaras th, .tabla-camaras td {
+        .tabla-camaras th, .tabla-camaras td,
+        .tabla-archivos th, .tabla-archivos td {
             padding: 0.75rem 1rem;
             text-align: left;
             border-bottom: 1px solid var(--primary-light);
         }
 
-        .tabla-camaras th {
+        .tabla-camaras th,
+        .tabla-archivos th {
             background: var(--primary-dark);
             color: var(--accent);
             font-weight: 600;
@@ -154,7 +157,8 @@
             letter-spacing: 0.5px;
         }
 
-        .tabla-camaras tbody tr:hover {
+        .tabla-camaras tbody tr:hover,
+        .tabla-archivos tbody tr:hover {
             background: rgba(100, 255, 218, 0.1);
         }
 

@@ -272,12 +272,27 @@ public class DialogoCrearCamara extends JDialog {
                             JOptionPane.INFORMATION_MESSAGE
                         );
                         
-                        // Cerrar el diálogo
-                        dispose();
-                        
                         // Actualizar la lista de cámaras en la interfaz principal
                         if (servidorUI != null) {
-                            servidorUI.cargarCamaras(equipoId);
+                            // Agregar un pequeño retraso para asegurar que el servidor haya terminado de procesar
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(1000); // Esperar 1 segundo
+                                    SwingUtilities.invokeLater(() -> {
+                                        servidorUI.cargarCamaras(equipoId);
+                                        // Cerrar el diálogo después de iniciar la carga
+                                        dispose();
+                                    });
+                                } catch (InterruptedException ex) {
+                                    Thread.currentThread().interrupt();
+                                    SwingUtilities.invokeLater(() -> {
+                                        servidorUI.cargarCamaras(equipoId);
+                                        dispose();
+                                    });
+                                }
+                            }).start();
+                        } else {
+                            dispose();
                         }
                     });
                 } else {

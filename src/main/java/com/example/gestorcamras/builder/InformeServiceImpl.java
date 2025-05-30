@@ -6,6 +6,8 @@ import com.example.gestorcamras.model.Informe;
 import com.example.gestorcamras.repository.InformeRepository;
 import com.example.gestorcamras.repository.EquipoRepository;
 import com.example.gestorcamras.repository.UsuarioRepository;
+import com.example.gestorcamras.repository.ArchivoMultimediaRepository;
+import com.example.gestorcamras.model.ArchivoMultimedia;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,15 +30,18 @@ public class InformeServiceImpl implements InformeService {
     private final InformeRepository informeRepository;
     private final UsuarioRepository usuarioRepository;
     private final EquipoRepository equipoRepository;
+    private final ArchivoMultimediaRepository archivoMultimediaRepository;
     private final InformeBuilder informeBuilder;
 
     @Autowired
     public InformeServiceImpl(InformeRepository informeRepository,
                             UsuarioRepository usuarioRepository,
-                            EquipoRepository equipoRepository) {
+                            EquipoRepository equipoRepository,
+                            ArchivoMultimediaRepository archivoMultimediaRepository) {
         this.informeRepository = informeRepository;
         this.usuarioRepository = usuarioRepository;
         this.equipoRepository = equipoRepository;
+        this.archivoMultimediaRepository = archivoMultimediaRepository;
         this.informeBuilder = new InformeBuilder();
     }
 
@@ -84,6 +89,9 @@ public class InformeServiceImpl implements InformeService {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> new RuntimeException("No se encontró el usuario con ID: " + usuarioId));
         
+        // Obtener archivos multimedia del equipo
+        List<ArchivoMultimedia> archivos = archivoMultimediaRepository.findByEquipoIdEquipo(equipoId);
+        
         // Usar el builder para crear el contenido HTML del informe
         String contenidoHtml = informeBuilder
                 .conTitulo(titulo)
@@ -91,6 +99,7 @@ public class InformeServiceImpl implements InformeService {
                 .conCamaras(equipo.getCamaras() != null ? 
                     new java.util.ArrayList<>(equipo.getCamaras()) : 
                     new java.util.ArrayList<>())
+                .conArchivosMultimedia(archivos)
                 .agregarSeccion("Descripción", descripcion)
                 .construir();
         

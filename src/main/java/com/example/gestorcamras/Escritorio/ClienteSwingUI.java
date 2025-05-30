@@ -28,6 +28,7 @@ public class ClienteSwingUI extends JFrame {
     private static final long serialVersionUID = 1L;
     
     private JTextField txtServidorUrl;
+    private final String serverIp;  // Almacenar la IP del servidor que se ingresó
     private String equipoIdGenerado;  // Para almacenar el ID del equipo generado
     private JTextArea txtLog;
     private File archivoSeleccionado;
@@ -38,6 +39,7 @@ public class ClienteSwingUI extends JFrame {
     
     public ClienteSwingUI(String usuario, String cookieSesion, String serverIp) {
         this.usuario = usuario;
+        this.serverIp = serverIp;  // Guardar la IP del servidor
         
         // Crear una variable local final para la URL formateada
         String urlFinal = serverIp;
@@ -100,17 +102,9 @@ public class ClienteSwingUI extends JFrame {
         JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panelArriba.add(new JLabel("Servidor URL:"));
         
-        // Botón para copiar IP local
-        JButton btnCopiarIP = new JButton("Copiar IP Local");
-        btnCopiarIP.addActionListener(e -> copiarIPLocal());
-        panelArriba.add(btnCopiarIP);
-
-        try {
-            String ipLocal = controller.getLocalIP();
-            txtServidorUrl = new JTextField("http://" + ipLocal + ":8080", 20);
-        } catch (Exception e) {
-            txtServidorUrl = new JTextField("http://localhost:8080", 20);
-        }
+        // Usar la IP del servidor que se ingresó en el diálogo de inicio
+        txtServidorUrl = new JTextField("http://" + serverIp + ":8080", 20);
+        txtServidorUrl.setEditable(false);  // Hacer el campo de solo lectura
         panelArriba.add(txtServidorUrl);
 
         // Etiqueta para mostrar el ID del equipo (solo lectura)
@@ -177,21 +171,6 @@ public class ClienteSwingUI extends JFrame {
         panel.add(scrollLog, BorderLayout.SOUTH);
 
         add(panel);
-    }
-    
-    private void copiarIPLocal() {
-        try {
-            String ipLocal = controller.getLocalIP();
-            String url = "http://" + ipLocal + ":8080";
-            txtServidorUrl.setText(url);
-            StringSelection stringSelection = new StringSelection(ipLocal);
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(stringSelection, null);
-            JOptionPane.showMessageDialog(this, "IP local copiada al portapapeles: " + ipLocal, 
-                "IP Local", JOptionPane.INFORMATION_MESSAGE);
-        } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al obtener IP local: " + ex.getMessage(), 
-                "Error", JOptionPane.ERROR_MESSAGE);
-        }
     }
     
     private void probarConexion() {

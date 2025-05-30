@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.example.gestorcamras.dto.UsuarioDTO;
 import com.example.gestorcamras.service.UsuarioService;
@@ -72,5 +73,12 @@ public class WebController {
     public String eliminarUsuario(@PathVariable Long id) {
         usuarioService.eliminarUsuario(id);
         return "redirect:/usuarios";
+    }
+    
+    @GetMapping("/ADMINISTRADOR/archivos/equipo/{id}")
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
+    public String verArchivosEquipo(@PathVariable Long id, Model model) {
+        model.addAttribute("equipoId", id);
+        return "archivos";
     }
 }

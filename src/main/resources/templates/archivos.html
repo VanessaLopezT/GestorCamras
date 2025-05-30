@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>Archivos del Equipo - Gestor de Cámaras</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-dark: #0a192f;
+            --primary-medium: #172a45;
+            --primary-light: #2a3a5c;
+            --accent: #64ffda;
+            --text-primary: #e6f1ff;
+            --text-secondary: #8892b0;
+            --success: #4caf50;
+            --danger: #f44336;
+            --warning: #ff9800;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--primary-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--primary-light);
+        }
+
+        .header h1 {
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-bottom: 1.5rem;
+            transition: color 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            background: var(--primary-light);
+        }
+
+        .back-btn:hover {
+            color: var(--accent);
+            background: var(--primary-light);
+            opacity: 0.9;
+        }
+
+        .files-container {
+            background: var(--primary-medium);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .files-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .files-header h2 {
+            color: var(--accent);
+            margin: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+
+        .file-card {
+            background-color: #1e293b;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 1.5rem;
+            min-height: 200px;
+        }
+
+        .file-header {
+            padding: 0;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 1rem;
+        }
+
+        .file-icon {
+            font-size: 2rem;
+            color: #60a5fa;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #e2e8f0;
+            word-break: break-all;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .file-details {
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            flex-grow: 1;
+        }
+
+        .file-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+            margin-bottom: 1rem;
+        }
+
+        .file-meta-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+
+        .file-meta-label {
+            color: #94a3b8;
+            font-weight: 500;
+            min-width: 100px;
+        }
+
+        .file-meta-value {
+            flex: 1;
+            word-break: break-word;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid #334155;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+            flex: 1;
+        }
+
+        .btn i {
+            font-size: 0.9em;
+        }
+
+        .btn-view {
+            background-color: #3a4a6c;
+            color: #e6f1ff;
+        }
+
+        .btn-view:hover {
+            background-color: #4d5d8c;
+        }
+
+        .btn-download {
+            background-color: #64ffda;
+            color: #0a192f;
+            font-weight: 500;
+        }
+
+        .btn-download:hover {
+            background-color: #88ffe4;
+        }
+        
+        /* Estilos para el modal de vista previa */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            overflow: auto;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background-color: #1e293b;
+            margin: 2% auto;
+            padding: 1.5rem;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            width: 95%;
+            max-width: 95%;
+            height: 95vh;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-title {
+            color: #f8fafc;
+            font-size: 1.25rem;
+            margin: 0 0 1rem 0;
+            padding: 0;
+            border: none;
+        }
+        
+        .preview-container {
+            background-color: #1e293b;
+            border-radius: 6px;
+            padding: 0;
+            margin: 0;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .no-preview {
+            text-align: center;
+            color: #94a3b8;
+        }
+        
+        .close {
+            color: #94a3b8;
+            font-size: 1.75rem;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            top: 0.5rem;
+            right: 1rem;
+            transition: color 0.2s;
+            background: rgba(0, 0, 0, 0.5);
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .close:hover {
+            color: #f8fafc;
+        }
+        
+        .no-files {
+            text-align: center;
+            padding: 2rem;
+            color: #94a3b8;
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .file-card {
+                min-height: auto;
+                padding: 1rem;
+            }
+
+            .file-meta {
+                font-size: 0.9rem;
+            }
+
+            .file-meta-label {
+                min-width: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a th:href="@{/ADMINISTRADOR/informes}" class="back-btn">
+            <i class="fas fa-arrow-left"></i> Volver a Informes
+        </a>
+
+        <div class="files-container">
+            <div class="files-header">
+                <h2><i class="fas fa-folder-open"></i> Archivos del Equipo</h2>
+            </div>
+
+            <div class="grid" id="filesGrid">
+                <!-- Los archivos se cargarán aquí dinámicamente -->
+                <div class="no-files">
+                    <i class="fas fa-folder-open fa-2x" style="margin-bottom: 1rem;"></i>
+                    <p>No hay archivos disponibles para este equipo.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para vista previa de archivos -->
+    <div id="previewModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2 class="modal-title" id="previewTitle">Vista previa</h2>
+            <div id="previewContent"></div>
+        </div>
+    </div>
+
+    <script th:inline="javascript">
+        // Obtener el ID del equipo de la URL
+        const pathSegments = window.location.pathname.split('/');
+        const equipoId = pathSegments[pathSegments.length - 1];
+
+        // Obtener referencias a los elementos del modal
+        const modal = document.getElementById('previewModal');
+        const modalContent = document.getElementById('previewContent');
+        const closeModal = document.getElementById('closeModal');
+        const previewTitle = document.getElementById('previewTitle');
+
+        // Cerrar el modal al hacer clic en la X
+        closeModal.onclick = function() {
+            modal.style.display = 'none';
+            // Detener la reproducción de video al cerrar el modal
+            const video = modalContent.querySelector('video');
+            if (video) {
+                video.pause();
+            }
+        };
+
+        // Cerrar el modal al hacer clic fuera del contenido
+        window.onclick = function(event) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+                // Detener la reproducción de video al cerrar el modal
+                const video = modalContent.querySelector('video');
+                if (video) {
+                    video.pause();
+                }
+            }
+        };
+
+        // Función para mostrar la vista previa de un archivo (solo la imagen o video)
+        function mostrarVistaPrevia(archivo) {
+            console.log('Archivo recibido en mostrarVistaPrevia:', archivo);
+            
+            // Obtener referencias a los elementos del DOM
+            const modal = document.getElementById('previewModal');
+            const previewTitle = document.getElementById('previewTitle');
+            const previewContent = document.getElementById('previewContent');
+            
+            // Actualizar el título del modal
+            previewTitle.textContent = archivo.nombreArchivo || 'Vista previa';
+            
+            // Limpiar el contenido anterior
+            previewContent.innerHTML = '';
+            
+            // Obtener la extensión del archivo
+            const extension = archivo.nombreArchivo.split('.').pop().toLowerCase();
+            const esVideo = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension);
+            
+            if (esVideo) {
+                // Crear contenedor para el video
+                const videoContainer = document.createElement('div');
+                videoContainer.style.width = '100%';
+                videoContainer.style.height = '100%';
+                videoContainer.style.display = 'flex';
+                videoContainer.style.flexDirection = 'column';
+                videoContainer.style.alignItems = 'center';
+                videoContainer.style.justifyContent = 'center';
+                videoContainer.style.padding = '20px';
+                videoContainer.style.boxSizing = 'border-box';
+                videoContainer.style.overflow = 'hidden';
+                
+                // Crear elemento de video
+                const video = document.createElement('video');
+                video.controls = true;
+                video.controlsList = 'nodownload';
+                video.autoplay = true;
+                video.playsInline = true;
+                video.preload = 'auto';
+                video.style.width = '95%';
+                video.style.maxWidth = '95%';
+                video.style.height = 'auto';
+                video.style.maxHeight = 'calc(90vh - 50px)';
+                video.style.borderRadius = '8px';
+                video.style.backgroundColor = 'transparent';
+                video.style.display = 'block';
+                
+                // Estilos para los controles del video
+                const style = document.createElement('style');
+                style.textContent = `
+                    video::-webkit-media-controls {
+                        background: transparent !important;
+                    }
+                    video::-webkit-media-controls-panel {
+                        background: rgba(0, 0, 0, 0.7) !important;
+                        border-radius: 0 0 8px 8px;
+                        opacity: 1 !important;
+                    }
+                    video::-webkit-media-controls-panel:hover {
+                        opacity: 1 !important;
+                    }
+                    video::-webkit-media-controls-play-button,
+                    video::-webkit-media-controls-timeline,
+                    video::-webkit-media-controls-current-time-display,
+                    video::-webkit-media-controls-time-remaining-display,
+                    video::-webkit-media-controls-mute-button,
+                    video::-webkit-media-controls-volume-slider,
+                    video::-webkit-media-controls-fullscreen-button {
+                        color: white;
+                        opacity: 1;
+                    }
+                `;
+                document.head.appendChild(style);
+                
+                // Crear elemento source para el video
+                const source = document.createElement('source');
+                // Usar la ruta correcta para obtener el video
+                source.src = `/api/archivos/${archivo.idArchivo}`;
+                source.type = `video/${extension}`;
+                
+                // Manejar errores de carga
+                video.onerror = function() {
+                    console.error('Error al cargar el video');
+                    previewContent.innerHTML = `
+                        <div style="color: #ff6b6b; text-align: center; padding: 2rem;">
+                            <p>No se pudo cargar el video. Asegúrate de que el formato sea compatible.</p>
+                            <p>Formatos soportados: MP4, WebM, OGG</p>
+                            <p>URL intentada: ${source.src}</p>
+                        </div>`;
+                };
+                
+                // Agregar source al video y video al contenedor
+                video.appendChild(source);
+                videoContainer.appendChild(video);
+                previewContent.appendChild(videoContainer);
+                
+                // Mostrar el modal
+                modal.style.display = 'flex';
+                
+                // Forzar el redimensionamiento
+                setTimeout(() => {
+                    video.style.width = '100%';
+                    video.style.height = 'auto';
+                }, 100);
+                
+                return;
+            }
+            
+            // Determinar el tipo de archivo
+            const tipoArchivo = archivo.tipo || '';
+            const esImagen = tipoArchivo.toUpperCase() === 'FOTO' || 
+                           ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].some(ext => 
+                               archivo.nombreArchivo.toLowerCase().endsWith(ext)
+                           );
+            
+            // Crear contenedor de vista previa
+            const previewContainer = document.createElement('div');
+            previewContainer.className = 'preview-container';
+            previewContainer.style.display = 'flex';
+            previewContainer.style.justifyContent = 'center';
+            previewContainer.style.alignItems = 'center';
+            previewContainer.style.minHeight = '60vh';
+            
+            if (esImagen) {
+                const imgContainer = document.createElement('div');
+                imgContainer.style.width = '100%';
+                imgContainer.style.height = '100%';
+                imgContainer.style.display = 'flex';
+                imgContainer.style.alignItems = 'center';
+                imgContainer.style.justifyContent = 'center';
+                imgContainer.style.overflow = 'hidden';
+                
+                const img = document.createElement('img');
+                const url = `/api/archivos/${archivo.idArchivo}`;
+                img.src = url;
+                img.alt = archivo.nombreArchivo || 'Vista previa';
+                img.style.maxWidth = '100%';
+                img.style.maxHeight = '100%';
+                img.style.maxHeight = '80vh';
+                img.style.objectFit = 'contain';
+                
+                // Manejar errores de carga de imagen
+                img.onerror = function() {
+                    previewContainer.innerHTML = `
+                        <div class="no-preview" style="text-align: center;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: #f59e0b; margin-bottom: 1rem;"></i>
+                            <p>No se pudo cargar la imagen</p>
+                        </div>
+                    `;
+                };
+                
+                previewContainer.appendChild(img);
+            } else {
+                // Para archivos que no son imágenes, mostrar un mensaje con el icono correspondiente
+                const icono = esImagen ? '<i class="fas fa-image"></i>' : '<i class="fas fa-file"></i>';
+                previewContainer.innerHTML = `
+                    <div class="no-preview" style="text-align: center;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem; color: #64748b;">
+                            ${icono}
+                        </div>
+                        <p>Vista previa no disponible para este tipo de archivo</p>
+                    </div>
+                `;
+            }
+            
+            // Agregar el contenedor al contenido del modal
+            previewContent.appendChild(previewContainer);
+            
+            // Mostrar el modal
+            modal.style.display = 'block';
+            
+            // Registrar en consola para depuración
+            console.log('Vista previa configurada para:', archivo);
+            
+            // Cerrar el modal al hacer clic en la X
+            const closeBtn = document.getElementById('closeModal');
+            if (closeBtn) {
+                closeBtn.onclick = function() {
+                    modal.style.display = 'none';
+                };
+            }
+            
+            // Cerrar el modal al hacer clic fuera del contenido
+            window.onclick = function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+        }
+        
+        // Función auxiliar para obtener el tipo de archivo basado en la extensión
+        function obtenerTipoArchivo(nombreArchivo) {
+            if (!nombreArchivo) return 'Archivo';
+            
+            const extension = nombreArchivo.split('.').pop().toLowerCase();
+            
+            // Solo mostramos los tipos básicos que necesitamos
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) {
+                return 'Imagen';
+            } else if (['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv'].includes(extension)) {
+                return 'Video';
+            } else if (['pdf'].includes(extension)) {
+                return 'Documento';
+            }
+            
+            return 'Archivo';
+        }
+        
+        // Función auxiliar para obtener la clase del icono según el tipo de archivo
+        function obtenerClaseIcono(nombreArchivo) {
+            if (!nombreArchivo) return 'fas fa-file';
+            
+            const tipo = obtenerTipoArchivo(nombreArchivo).toLowerCase();
+            
+            // Mapeo de tipos a iconos de Font Awesome
+            const iconos = {
+                'imagen': 'fas fa-image',
+                'video': 'fas fa-video',
+                'documento': 'fas fa-file-pdf'
+            };
+            
+            return iconos[tipo] || 'fas fa-file';
+        }
+
+        // Función para cargar los archivos del equipo
+        async function cargarArchivos() {
+            try {
+                const response = await fetch(`/api/equipos/${equipoId}/archivos`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    credentials: 'same-origin'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al cargar los archivos');
+                }
+
+                const archivos = await response.json();
+                mostrarArchivos(archivos);
+            } catch (error) {
+                console.error('Error:', error);
+                mostrarError('No se pudieron cargar los archivos');
+            }
+        }
+
+        // Función para mostrar los archivos en la cuadrícula
+        function mostrarArchivos(archivos) {
+            const filesGrid = document.getElementById('filesGrid');
+            
+            if (!archivos || archivos.length === 0) {
+                filesGrid.innerHTML = `
+                    <div class="no-files">
+                        <i class="fas fa-folder-open fa-2x" style="margin-bottom: 1rem;"></i>
+                        <p>No hay archivos disponibles para este equipo.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Limpiar el contenedor
+            filesGrid.innerHTML = '';
+
+            // Procesar cada archivo
+            archivos.forEach(archivo => {
+                // Crear el elemento de la tarjeta
+                const fileCard = document.createElement('div');
+                fileCard.className = 'file-card';
+                
+                // Determinar el tipo de archivo para el icono
+                const tipo = archivo.tipo || '';
+                const esImagen = tipo.toUpperCase() === 'FOTO' || 
+                               ['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext => 
+                                   archivo.nombreArchivo.toLowerCase().endsWith(ext)
+                               );
+                
+                // Formatear la fecha de captura
+                const fechaCaptura = formatearFecha(archivo.fechaCaptura || archivo.fechaSubida);
+                
+                // Establecer el contenido de la tarjeta
+                fileCard.innerHTML = `
+                    <div class="file-header">
+                        <div class="file-icon">
+                            ${esImagen ? '<i class="fas fa-image"></i>' : '<i class="fas fa-file"></i>'}
+                        </div>
+                        <div class="file-name">${archivo.nombreArchivo}</div>
+                    </div>
+                    <div class="file-details">
+                        <div class="file-meta">
+                            <div class="file-meta-row">
+                                <span class="file-meta-label">Nombre:</span>
+                                <span class="file-meta-value">${archivo.nombreArchivo}</span>
+                            </div>
+                            <div class="file-meta-row">
+                                <span class="file-meta-label">Tipo:</span>
+                                <span class="file-meta-value">${tipo || 'Archivo'}</span>
+                            </div>
+                            <div class="file-meta-row">
+                                <span class="file-meta-label">Capturado el:</span>
+                                <span class="file-meta-value">${fechaCaptura}</span>
+                            </div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn btn-view" data-archivo='${JSON.stringify(archivo).replace(/'/g, '&#39;')}'>
+                                <i class="fas fa-eye"></i> Ver
+                            </button>
+                            <a href="/api/archivos/${archivo.idArchivo}" class="btn btn-download" download="${archivo.nombreArchivo}">
+                                <i class="fas fa-download"></i> Descargar
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+
+                // Agregar manejador de eventos para la vista previa
+                fileCard.querySelector('.btn-view').addEventListener('click', () => {
+                    mostrarVistaPrevia(archivo);
+                });
+
+                // Agregar la tarjeta al contenedor
+                filesGrid.appendChild(fileCard);
+            });
+        }
+
+        // Función para obtener el icono según el tipo de archivo
+        function obtenerIconoPorTipo(tipo) {
+            if (!tipo) return '<i class="fas fa-file"></i>';
+            
+            const tipoLower = tipo.toLowerCase();
+            
+            if (tipoLower.includes('foto') || tipoLower.includes('image')) {
+                return '<i class="fas fa-image"></i>';
+            } else if (tipoLower.includes('video')) {
+                return '<i class="fas fa-video"></i>';
+            } else if (tipoLower.includes('pdf')) {
+                return '<i class="fas fa-file-pdf"></i>';
+            } else if (tipoLower.includes('zip') || tipoLower.includes('rar') || tipoLower.includes('7z')) {
+                return '<i class="fas fa-file-archive"></i>';
+            } else if (tipoLower.includes('doc') || tipoLower.includes('text')) {
+                return '<i class="fas fa-file-word"></i>';
+            } else if (tipoLower.includes('xls')) {
+                return '<i class="fas fa-file-excel"></i>';
+            } else if (tipoLower.includes('ppt')) {
+                return '<i class="fas fa-file-powerpoint"></i>';
+            } else {
+                return '<i class="fas fa-file"></i>';
+            }
+        }
+
+        // Función para formatear el tamaño del archivo
+        function formatearTamaño(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Función para formatear la fecha
+        function formatearFecha(fecha) {
+            if (!fecha) return 'Fecha no disponible';
+            return new Date(fecha).toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function formatearTamaño(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Función para descargar un archivo
+        function descargarArchivo(archivoId, nombreArchivo) {
+            // Crear un enlace temporal
+            const enlace = document.createElement('a');
+            enlace.href = `/api/archivos/${archivoId}/descargar`;
+            enlace.download = nombreArchivo || 'archivo-descargado';
+            
+            // Agregar el enlace al documento, hacer clic y luego removerlo
+            document.body.appendChild(enlace);
+            enlace.click();
+            document.body.removeChild(enlace);
+            
+            // Mostrar notificación de descarga exitosa
+            mostrarNotificacion('Descarga iniciada', 'El archivo se está descargando...', 'success');
+        }
+
+        // Función para mostrar una notificación
+        function mostrarNotificacion(titulo, mensaje, tipo = 'info') {
+            // Aquí podrías implementar un sistema de notificaciones más elaborado
+            console.log(`[${tipo.toUpperCase()}] ${titulo}: ${mensaje}`);
+            // Por ahora usamos un alert simple
+            alert(`${titulo}: ${mensaje}`);
+        }
+
+        // Función para mostrar errores
+        function mostrarError(mensaje) {
+            const filesGrid = document.getElementById('filesGrid');
+            filesGrid.innerHTML = `
+                <div class="no-files">
+                    <i class="fas fa-exclamation-triangle fa-2x" style="color: var(--danger); margin-bottom: 1rem;"></i>
+                    <p>${mensaje}</p>
+                </div>
+            `;
+        }
+
+        // Cargar los archivos cuando la página esté lista
+        document.addEventListener('DOMContentLoaded', () => {
+            cargarArchivos();
+        });
+    </script>
+</body>
+</html>

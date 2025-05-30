@@ -3,11 +3,11 @@ package com.example.gestorcamras.builder;
 import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.model.Equipo;
 import com.example.gestorcamras.model.Ubicacion;
-import com.example.gestorcamras.model.Informe;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import com.example.gestorcamras.model.ArchivoMultimedia;
 
 /**
  * Builder para crear objetos Informe de manera flexible y reutilizable.
@@ -22,6 +22,7 @@ public class InformeBuilder {
     // Información del equipo
     private Equipo equipo;
     private List<Camara> camaras;
+    private List<ArchivoMultimedia> archivosMultimedia;
 
     /**
      * Constructor por defecto que inicializa valores por defecto.
@@ -29,6 +30,7 @@ public class InformeBuilder {
     public InformeBuilder() {
         this.fechaGeneracion = LocalDateTime.now();
         this.camaras = new ArrayList<>();
+        this.archivosMultimedia = new ArrayList<>();
         this.contenido = "";
     }
 
@@ -139,6 +141,32 @@ public class InformeBuilder {
     }
     
     /**
+     * Establece la lista de archivos multimedia para el informe.
+     * @param archivosMultimedia Lista de archivos multimedia
+     * @return Esta instancia para encadenamiento de métodos
+     */
+    public InformeBuilder conArchivosMultimedia(List<ArchivoMultimedia> archivosMultimedia) {
+        if (archivosMultimedia != null) {
+            this.archivosMultimedia = new ArrayList<>(archivosMultimedia);
+        } else {
+            this.archivosMultimedia = new ArrayList<>();
+        }
+        return this;
+    }
+    
+    /**
+     * Agrega un archivo multimedia a la lista de archivos del informe.
+     * @param archivo Archivo multimedia a agregar
+     * @return Esta instancia para encadenamiento de métodos
+     */
+    public InformeBuilder agregarArchivoMultimedia(ArchivoMultimedia archivo) {
+        if (archivo != null && this.archivosMultimedia != null) {
+            this.archivosMultimedia.add(archivo);
+        }
+        return this;
+    }
+    
+    /**
      * Construye el informe con la información configurada.
      * @return Una cadena con el contenido HTML del informe
      */
@@ -183,7 +211,7 @@ public class InformeBuilder {
             sb.append("<th>Fecha de Registro</th>");
             sb.append("<th>Ubicación</th>");
             sb.append("</tr></thead><tbody>");
-            
+
             for (Camara camara : camaras) {
                 sb.append("<tr>");
                 sb.append("<td>").append(camara.getIdCamara() != null ? camara.getIdCamara() : "N/A").append("</td>");
@@ -203,7 +231,6 @@ public class InformeBuilder {
                 sb.append("<td>");
                 if (camara.getUbicacion() != null) {
                     Ubicacion ubicacion = camara.getUbicacion();
-                    sb.append("<div><strong>ID:</strong> ").append(ubicacion.getId()).append("</div>");
                     if (ubicacion.getDireccion() != null && !ubicacion.getDireccion().isEmpty()) {
                         sb.append("<div><strong>Dirección:</strong> ").append(ubicacion.getDireccion()).append("</div>");
                     }
@@ -222,6 +249,68 @@ public class InformeBuilder {
             sb.append("</div>");
         } else {
             sb.append("<div class='sin-camaras'><p>No hay cámaras asociadas a este equipo.</p></div>");
+        }
+        
+        // Sección de archivos multimedia (después de las cámaras)
+        if (archivosMultimedia != null && !archivosMultimedia.isEmpty()) {
+            // Contadores por tipo de archivo
+            long totalFotos = archivosMultimedia.stream()
+                .filter(a -> a.getTipo() == ArchivoMultimedia.TipoArchivo.FOTO)
+                .count();
+            long totalVideos = archivosMultimedia.size() - totalFotos;
+            
+            sb.append("<div class='seccion-archivos-multimedia'>");
+            sb.append("<h3>Archivos Multimedia del Equipo</h3>");
+            
+            // Resumen de archivos
+            sb.append("<div class='info-resumen'>");
+            sb.append("<p><strong>Total de archivos:</strong> ").append(archivosMultimedia.size()).append("</p>");
+            sb.append("<p><strong>Fotos:</strong> ").append(totalFotos).append("</p>");
+            sb.append("<p><strong>Videos:</strong> ").append(totalVideos).append("</p>");
+            sb.append("</div>");
+            
+            // Tabla con detalles de los archivos
+            sb.append("<div class='tabla-contenedor'>");
+            sb.append("<table class='tabla-archivos'>");
+            sb.append("<thead><tr>");
+            sb.append("<th>Nombre del Archivo</th>");
+            sb.append("<th>Tipo</th>");
+            sb.append("<th>Fecha de Captura</th>");
+            sb.append("<th>Fecha de Subida</th>");
+            sb.append("<th>Cámara</th>");
+            sb.append("</tr></thead><tbody>");
+            
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            
+            for (ArchivoMultimedia archivo : archivosMultimedia) {
+                sb.append("<tr>");
+                sb.append("<td>").append(archivo.getNombreArchivo() != null ? 
+                    String.format("<span class='nombre-archivo'>%s</span>", archivo.getNombreArchivo()) : 
+                    "<span class='texto-desconocido'>N/A</span>").append("</td>");
+                    
+                String tipoClase = archivo.getTipo() != null ? 
+                    archivo.getTipo().toString().toLowerCase() : "desconocido";
+                sb.append(String.format("<td><span class='tipo-archivo %s'>%s</span></td>", 
+                    tipoClase, 
+                    archivo.getTipo() != null ? archivo.getTipo().toString() : "N/A"));
+                    
+                sb.append("<td>").append(archivo.getFechaCaptura() != null ? 
+                    archivo.getFechaCaptura().format(dateFormatter) : 
+                    "<span class='texto-desconocido'>N/A</span>").append("</td>");
+                    
+                sb.append("<td>").append(archivo.getFechaSubida() != null ? 
+                    archivo.getFechaSubida().format(dateFormatter) : 
+                    "<span class='texto-desconocido'>N/A</span>").append("</td>");
+                    
+                sb.append("<td>").append(archivo.getCamara() != null && archivo.getCamara().getNombre() != null ? 
+                    String.format("<span class='nombre-camara'>%s</span>", archivo.getCamara().getNombre()) : 
+                    "<span class='texto-desconocido'>N/A</span>").append("</td>");
+                sb.append("</tr>");
+            }
+            
+            sb.append("</tbody></table>");
+            sb.append("</div>"); // Cierre de tabla-contenedor
+            sb.append("</div>"); // Cierre de seccion-archivos-multimedia
         }
         
         // Contenido adicional si existe

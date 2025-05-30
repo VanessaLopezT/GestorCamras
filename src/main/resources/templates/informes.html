@@ -255,6 +255,9 @@
                     <button class="btn-ver-informe" onclick="verInformeEquipo(${equipo.idEquipo})">
                         <i class="fas fa-file-alt"></i> Ver Informe
                     </button>
+                    <button class="btn-ver-archivos" onclick="verArchivosEquipo(${equipo.idEquipo})">
+                        <i class="fas fa-folder-open"></i> Ver Archivos
+                    </button>
                 </div>
             `;
             return card.outerHTML;
@@ -262,13 +265,16 @@
         
         // Función para ver el informe de un equipo
         function verInformeEquipo(equipoId) {
-            // Redirigir a la página de informe del equipo con el ID como parámetro
-            window.location.href = `/ADMINISTRADOR/informes/equipo/${equipoId}`;
+            window.location.href = '/ADMINISTRADOR/informes/equipo/' + equipoId;
+        }
+        
+        // Función para ver los archivos de un equipo
+        function verArchivosEquipo(equipoId) {
+            window.location.href = `/ADMINISTRADOR/archivos/equipo/${equipoId}`;
         }
         
         // Función para mostrar notificaciones
         function showNotification(message) {
-            // Puedes implementar notificaciones bonitas aquí
             console.log('Notificación:', message);
             // Ejemplo simple de notificación
             alert(message);
