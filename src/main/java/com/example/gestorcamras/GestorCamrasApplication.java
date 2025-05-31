@@ -24,7 +24,7 @@ import java.io.StringWriter;
     "com.example.gestorcamras.config",
     "com.example.gestorcamras.security"
 })
-@EnableJpaRepositories("com.example.gestorcamras.repository")
+@EnableJpaRepositories({"com.example.gestorcamras.repository", "com.example.gestorcamras.pool"})
 @EntityScan("com.example.gestorcamras.model")
 public class GestorCamrasApplication {
     

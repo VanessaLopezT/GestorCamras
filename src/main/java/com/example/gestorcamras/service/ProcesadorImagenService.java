@@ -3,12 +3,9 @@ package com.example.gestorcamras.service;
 import com.example.gestorcamras.dto.FiltroDTO;
 import com.example.gestorcamras.dto.ImagenDTO;
 import com.example.gestorcamras.dto.ImagenProcesadaDTO;
-import com.example.gestorcamras.pool.FiltroBasicoFactory;
-import com.example.gestorcamras.pool.FiltroOperacion;
-import com.example.gestorcamras.pool.FiltroPool;
-import com.example.gestorcamras.model.Filtro;
+import com.example.gestorcamras.filtros.FiltroImagen;
+import com.example.gestorcamras.pool.FiltroObjectPool;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.imageio.ImageIO;
@@ -21,63 +18,65 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ProcesadorImagenService {
-    private final FiltroPool filtroPool;
+    private final FiltroObjectPool filtroObjectPool;
     private final ImagenProcesadaService imagenProcesadaService;
-
-    @Autowired
-    private FiltroBasicoFactory filtroBasicoFactory;
 
     public ImagenProcesadaDTO procesarImagen(ImagenDTO imagenOriginal, FiltroDTO filtroDTO) {
         // Obtener un filtro del pool
-        Filtro filtro = filtroPool.obtenerFiltro(filtroDTO.getTipo(), filtroDTO.getDescripcion());
-
-        if (filtro == null) {
-            throw new IllegalArgumentException("No se pudo obtener un filtro del pool con los parámetros dados.");
-        }
+        FiltroImagen filtro = filtroObjectPool.obtenerFiltro(filtroDTO.getTipo());
 
         try {
             // Crear el DTO de imagen procesada
             ImagenProcesadaDTO imagenProcesadaDTO = new ImagenProcesadaDTO();
             String nombreProcesado = "Procesada_" + UUID.randomUUID() + "_" + imagenOriginal.getNombre();
+            String rutaProcesada = "processed/" + nombreProcesado;
+            
             imagenProcesadaDTO.setNombre(nombreProcesado);
-            imagenProcesadaDTO.setRutaImagen("processed/" + nombreProcesado);
-
+            imagenProcesadaDTO.setRutaImagen(rutaProcesada);
             imagenProcesadaDTO.setFechaProcesamiento(LocalDateTime.now());
             imagenProcesadaDTO.setTamaño(imagenOriginal.getTamaño()); // Podría variar según el procesamiento
-            imagenProcesadaDTO.setRutaImagen("processed/" + imagenOriginal.getNombre());
             imagenProcesadaDTO.setImagenOriginalId(imagenOriginal.getIdImagen());
             imagenProcesadaDTO.setFiltroId(filtroDTO.getIdFiltro());
 
-            // Aquí iría la lógica real de procesamiento de la imagen
-            aplicarFiltro(imagenOriginal.getRutaAlmacenamiento(), imagenProcesadaDTO.getRutaImagen(), filtro);
+            // Procesar la imagen con el filtro
+            aplicarFiltro(imagenOriginal.getRutaAlmacenamiento(), rutaProcesada, filtro);
 
             // Guardar la imagen procesada
             return imagenProcesadaService.guardarImagen(imagenProcesadaDTO);
         } finally {
             // Asegurarnos de devolver el filtro al pool después de usarlo
-            filtroPool.devolverFiltro(filtro);
+            if (filtro != null) {
+                filtroObjectPool.devolverFiltro(filtro);
+            }
         }
     }
 
-    private void aplicarFiltro(String rutaOriginal, String rutaDestino, Filtro filtro) {
+    private void aplicarFiltro(String rutaOriginal, String rutaDestino, FiltroImagen filtro) {
         try {
             // Cargar imagen original
             BufferedImage original = ImageIO.read(new File(rutaOriginal));
+            if (original == null) {
+                throw new IOException("No se pudo cargar la imagen desde: " + rutaOriginal);
+            }
 
-            // Obtener el filtro real desde FiltroBasicoFactory (basado en el tipo del filtro del pool)
-            FiltroOperacion filtroOperacion = filtroBasicoFactory.obtenerFiltro(filtro.getTipo());
-
-            // Aplicar el filtro
-            BufferedImage procesada = filtroOperacion.aplicar(original);
+            // Aplicar el filtro directamente usando la interfaz FiltroImagen
+            BufferedImage procesada = filtro.aplicar(original);
 
             // Crear el directorio si no existe
             File salida = new File(rutaDestino);
-            salida.getParentFile().mkdirs();
+            File directorioPadre = salida.getParentFile();
+            if (directorioPadre != null && !directorioPadre.exists()) {
+                if (!directorioPadre.mkdirs()) {
+                    throw new IOException("No se pudo crear el directorio: " + directorioPadre.getAbsolutePath());
+                }
+            }
 
             // Guardar imagen procesada
-            ImageIO.write(procesada, "png", salida);
+            if (!ImageIO.write(procesada, "png", salida)) {
+                throw new IOException("No se encontró un escritor de imagen adecuado para el formato PNG");
+            }
         } catch (IOException e) {
-            throw new RuntimeException("Error al procesar la imagen con el filtro: " + filtro.getTipo(), e);
+            throw new RuntimeException("Error al procesar la imagen: " + e.getMessage(), e);
         }
     }
 

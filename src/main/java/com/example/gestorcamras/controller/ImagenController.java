@@ -82,11 +82,25 @@ public class ImagenController {
                 .collect(Collectors.toList());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ImagenDTO> obtenerImagenPorId(@PathVariable Long id) {
-        Optional<Imagen> imagenOpt = imagenService.obtenerPorId(id);
-        return imagenOpt.map(imagen -> ResponseEntity.ok(convertirADTO(imagen)))
-                .orElse(ResponseEntity.notFound().build());
+    @GetMapping("/equipos/{equipoId}/imagenes/{imagenId}")
+    public ResponseEntity<ImagenDTO> obtenerImagenPorEquipo(
+            @PathVariable Long equipoId,
+            @PathVariable Long imagenId) {
+        
+        // Validar que el equipo existe
+        Optional<Equipo> equipoOpt = equipoService.obtenerEntidadPorId(equipoId);
+        if (equipoOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        // Obtener la imagen validando que pertenece al equipo
+        Optional<Imagen> imagenOpt = imagenService.obtenerPorIdYEquipo(imagenId, equipoId);
+        if (imagenOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        // Convertir a DTO y devolver
+        return ResponseEntity.ok(convertirADTO(imagenOpt.get()));
     }
 
     @PostMapping
@@ -140,23 +154,35 @@ public class ImagenController {
     }
 
 
-    @PostMapping("/{id}/procesar")
+    @PostMapping("/equipos/{equipoId}/imagenes/{imagenId}/procesar")
     public ResponseEntity<ImagenProcesadaDTO> procesarImagen(
-            @PathVariable Long id,
+            @PathVariable Long equipoId,
+            @PathVariable Long imagenId,
             @RequestBody FiltroDTO filtroDTO) {
 
-        Optional<Imagen> imagenOpt = imagenService.obtenerPorId(id);
-
-        if (imagenOpt.isPresent()) {
-            ImagenDTO imagenDTO = convertirADTO(imagenOpt.get());
-            ImagenProcesadaDTO resultado = procesadorImagenService.procesarImagen(
-                    imagenDTO,
-                    filtroDTO
-            );
-            return ResponseEntity.ok(resultado);
+        // Validar que el equipo existe
+        Optional<Equipo> equipoOpt = equipoService.obtenerEntidadPorId(equipoId);
+        if (equipoOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.notFound().build();
+        
+        // Obtener la imagen validando que pertenece al equipo
+        Optional<Imagen> imagenOpt = imagenService.obtenerPorIdYEquipo(imagenId, equipoId);
+        if (imagenOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
 
+        // Procesar la imagen
+        ImagenDTO imagenDTO = convertirADTO(imagenOpt.get());
+        ImagenProcesadaDTO resultado = procesadorImagenService.procesarImagen(
+                imagenDTO,
+                filtroDTO
+        );
+        
+        // Asociar la imagen procesada con el equipo
+        resultado.setEquipoId(equipoId);
+        
+        return ResponseEntity.ok(resultado);
     }
 
     @PostMapping("/equipos/{equipoId}/imagenes")

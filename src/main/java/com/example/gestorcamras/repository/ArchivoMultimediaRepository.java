@@ -18,7 +18,11 @@ public interface ArchivoMultimediaRepository extends JpaRepository<ArchivoMultim
     @Query("SELECT DISTINCT a FROM ArchivoMultimedia a LEFT JOIN FETCH a.equipo WHERE a.camara.idCamara = :camaraId")
     List<ArchivoMultimedia> findByCamaraIdCamaraWithEquipo(@Param("camaraId") Long camaraId);
     
-    // Métodos antiguos (mantener para compatibilidad)
+    // Método para buscar por equipo usando la relación camara.equipo.id
+    @Query("SELECT a FROM ArchivoMultimedia a WHERE a.camara.equipo.id = :equipoId")
+    List<ArchivoMultimedia> findByCamaraEquipoId(@Param("equipoId") Long equipoId);
+    
+    // Métodos para buscar por equipo y cámara (usando la nomenclatura correcta)
     List<ArchivoMultimedia> findByEquipoIdEquipo(Long equipoId);
     List<ArchivoMultimedia> findByCamara_IdCamara(Long camaraId);
 }

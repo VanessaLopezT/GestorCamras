@@ -297,22 +297,32 @@ public class CamaraServiceImpl implements CamaraService {
     
     @Override
     @Transactional(readOnly = true)
-    public List<CamaraDTO> obtenerPorEquipo(Long idEquipo) {
+    public List<Camara> obtenerCamarasPorEquipo(Long equipoId) {
         // Obtener las cámaras
-        List<Camara> camaras = camaraRepository.findByEquipoIdEquipo(idEquipo);
+        List<Camara> camaras = camaraRepository.findByEquipoIdEquipo(equipoId);
         
-        // Convertir a DTOs dentro del contexto transaccional
+        // Inicializar relaciones necesarias
+        for (Camara camara : camaras) {
+            if (camara.getEquipo() != null) {
+                camara.getEquipo().getNombre();
+            }
+            if (camara.getUbicacion() != null) {
+                camara.getUbicacion().getId();
+            }
+        }
+        
+        return camaras;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<CamaraDTO> obtenerPorEquipo(Long idEquipo) {
+        // Obtener las cámaras usando el método obtenerCamarasPorEquipo
+        List<Camara> camaras = obtenerCamarasPorEquipo(idEquipo);
+        
+        // Convertir a DTOs
         List<CamaraDTO> dtos = camaras.stream()
-                .map(camara -> {
-                    // Inicializar las relaciones necesarias
-                    if (camara.getEquipo() != null) {
-                        camara.getEquipo().getNombre();
-                    }
-                    if (camara.getUbicacion() != null) {
-                        camara.getUbicacion().getId();
-                    }
-                    return toDTO(camara);
-                })
+                .map(this::toDTO)
                 .collect(Collectors.toList());
         
         // Guardar en caché los DTOs

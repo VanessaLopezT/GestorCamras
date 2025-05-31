@@ -10,6 +10,7 @@ public class ImagenProcesadaDTO {
     private String rutaImagen;
     private Long imagenOriginalId; // solo el id para no cargar toda la entidad
     private Long filtroId;
+    private Long equipoId; // ID del equipo al que pertenece la imagen procesada
 
     // Getters y Setters
     public Long getIdImgProcesada() {
@@ -66,5 +67,13 @@ public class ImagenProcesadaDTO {
 
     public void setFiltroId(Long filtroId) {
         this.filtroId = filtroId;
+    }
+    
+    public Long getEquipoId() {
+        return equipoId;
+    }
+
+    public void setEquipoId(Long equipoId) {
+        this.equipoId = equipoId;
     }
 }

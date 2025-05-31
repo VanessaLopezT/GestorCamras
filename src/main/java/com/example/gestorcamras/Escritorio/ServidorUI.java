@@ -1,6 +1,8 @@
 package com.example.gestorcamras.Escritorio;
 
 import com.example.gestorcamras.Escritorio.VisualizadorMultimediaUI;
+import com.example.gestorcamras.Escritorio.dto.EquipoEscritorioDTO;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 

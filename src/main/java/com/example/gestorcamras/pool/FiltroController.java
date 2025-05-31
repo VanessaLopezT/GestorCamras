@@ -1,7 +1,7 @@
-package com.example.gestorcamras.controller;
+package com.example.gestorcamras.pool;
 
 import com.example.gestorcamras.dto.FiltroDTO;
-import com.example.gestorcamras.service.FiltroService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

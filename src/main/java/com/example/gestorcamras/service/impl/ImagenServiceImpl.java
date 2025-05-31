@@ -38,5 +38,9 @@ public class ImagenServiceImpl implements ImagenService {
     public List<Imagen> obtenerPorCamara(Long camaraId) {
         return imagenRepository.findByCamara_IdCamara(camaraId);
     }
-
+    
+    @Override
+    public Optional<Imagen> obtenerPorIdYEquipo(Long id, Long equipoId) {
+        return imagenRepository.findByIdImagenAndCamara_EquipoId(id, equipoId);
+    }
 }

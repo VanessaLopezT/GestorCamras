@@ -1,4 +1,4 @@
-package com.example.gestorcamras.Escritorio;
+package com.example.gestorcamras.Escritorio.dto;
 
 /**
  * Clase DTO para representar un equipo en el sistema.

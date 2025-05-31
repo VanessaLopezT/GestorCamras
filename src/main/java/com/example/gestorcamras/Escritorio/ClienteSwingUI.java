@@ -22,7 +22,11 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 
+import com.example.gestorcamras.Escritorio.controller.ClienteSwingController;
 import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
+import com.example.gestorcamras.Escritorio.AplicarFiltros;
+import com.example.gestorcamras.service.ArchivoMultimediaService;
+import com.example.gestorcamras.service.CamaraService;
 
 public class ClienteSwingUI extends JFrame {
     private static final long serialVersionUID = 1L;
@@ -121,7 +125,7 @@ public class ClienteSwingUI extends JFrame {
 
         panel.add(panelArriba, BorderLayout.NORTH);
 
-        // Panel central para tabla de cámaras y botones
+        // Panel central para tabla de cámaras
         JPanel panelCentro = new JPanel(new BorderLayout(5, 5));
         panelCentro.add(new JLabel("Cámaras disponibles:"), BorderLayout.NORTH);
         
@@ -130,7 +134,7 @@ public class ClienteSwingUI extends JFrame {
         scrollTabla.setPreferredSize(new Dimension(0, 200));
         panelCentro.add(scrollTabla, BorderLayout.CENTER);
 
-        // Botones para seleccionar y enviar archivos
+        // Panel para los botones de archivos
         JPanel panelBotones = new JPanel(new GridLayout(2, 2, 10, 10));
         JButton btnSeleccionarImagen = new JButton("Seleccionar imagen");
         JButton btnEnviarImagen = new JButton("Enviar imagen");
@@ -147,29 +151,61 @@ public class ClienteSwingUI extends JFrame {
         panelBotones.add(btnSeleccionarVideo);
         panelBotones.add(btnEnviarVideo);
         
+        // Panel para los botones de cámara y filtros
+        JPanel panelCamara = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        
         // Botón para abrir la cámara
         JButton btnAbrirCamara = new JButton("Abrir Cámara");
         btnAbrirCamara.addActionListener(e -> abrirCamara());
-        
-        // Agregar el botón de cámara en una nueva fila
-        JPanel panelCamara = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         panelCamara.add(btnAbrirCamara);
         
+        // Botón para abrir los filtros
+        JButton btnAbrirFiltros = new JButton("Aplicar Filtros");
+        btnAbrirFiltros.addActionListener(e -> {
+            try {
+                // Obtener las instancias de los servicios del controlador
+                ArchivoMultimediaService archivoService = controller.getArchivoMultimediaService();
+                CamaraService camaraService = controller.getCamaraService();
+                
+                if (archivoService != null && camaraService != null) {
+                    AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService);
+                    filtros.mostrar();
+                } else {
+                    JOptionPane.showMessageDialog(this, 
+                        "No se pudieron cargar los servicios necesarios para los filtros.",
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, 
+                    "Error al abrir la ventana de filtros: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+        });
+        panelCamara.add(btnAbrirFiltros);
+        
         // Crear un panel para contener los botones y el panel de cámara
-        JPanel panelContenedor = new JPanel(new BorderLayout());
-        panelContenedor.add(panelBotones, BorderLayout.NORTH);
-        panelContenedor.add(panelCamara, BorderLayout.SOUTH);
+        JPanel panelBotonesInferior = new JPanel(new BorderLayout(10, 10));
+        panelBotonesInferior.add(panelBotones, BorderLayout.NORTH);
+        panelBotonesInferior.add(panelCamara, BorderLayout.SOUTH);
 
-        panelCentro.add(panelContenedor, BorderLayout.SOUTH);
-        panel.add(panelCentro, BorderLayout.CENTER);
-
+        // Panel sur para los botones y el área de log
+        JPanel panelSur = new JPanel(new BorderLayout(10, 10));
+        panelSur.add(panelBotonesInferior, BorderLayout.NORTH);
+        
         // Área de log
         txtLog = new JTextArea();
         txtLog.setEditable(false);
         JScrollPane scrollLog = new JScrollPane(txtLog);
-        scrollLog.setPreferredSize(new Dimension(580, 100));
-        panel.add(scrollLog, BorderLayout.SOUTH);
-
+        scrollLog.setPreferredSize(new Dimension(0, 100));
+        panelSur.add(scrollLog, BorderLayout.CENTER);
+        
+        // Agregar paneles al panel principal
+        panelCentro.add(panelBotonesInferior, BorderLayout.SOUTH);
+        panel.add(panelCentro, BorderLayout.CENTER);
+        panel.add(panelSur, BorderLayout.SOUTH);
         add(panel);
     }
     

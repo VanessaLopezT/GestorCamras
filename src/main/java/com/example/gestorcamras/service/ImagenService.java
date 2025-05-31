@@ -7,8 +7,8 @@ import java.util.Optional;
 public interface ImagenService {
     List<Imagen> obtenerTodas();
     Optional<Imagen> obtenerPorId(Long id);
+    Optional<Imagen> obtenerPorIdYEquipo(Long id, Long equipoId);
     Imagen guardarImagen(Imagen imagen);
     void eliminarImagen(Long id);
     List<Imagen> obtenerPorCamara(Long camaraId);
-
 }

@@ -1,4 +1,4 @@
-package com.example.gestorcamras.Escritorio;
+package com.example.gestorcamras.Escritorio.controller;
 
 import com.example.gestorcamras.Escritorio.service.ClienteCamaraService;
 import com.example.gestorcamras.Escritorio.service.ClienteEquipoService;
@@ -13,7 +13,6 @@ import java.net.NetworkInterface;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
-
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
@@ -33,6 +32,20 @@ public class ClienteSwingController {
     private final FileUploadService fileUploadService;
     private StompClient stompClient;
 
+    // Método para obtener el servicio de archivos multimedia
+    public com.example.gestorcamras.service.ArchivoMultimediaService getArchivoMultimediaService() {
+        // Si necesitas una implementación específica, debes crearla
+        // Por ahora, devolvemos null y manejamos el caso en el UI
+        return null;
+    }
+    
+    // Método para obtener el servicio de cámaras
+    public com.example.gestorcamras.service.CamaraService getCamaraService() {
+        // Si necesitas una implementación específica, debes crearla
+        // Por ahora, devolvemos null y manejamos el caso en el UI
+        return null;
+    }
+    
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
         this.cookieSesion = cookieSesion;
         

@@ -1,4 +1,4 @@
-package com.example.gestorcamras.service;
+package com.example.gestorcamras.pool;
 
 import com.example.gestorcamras.dto.FiltroDTO;
 

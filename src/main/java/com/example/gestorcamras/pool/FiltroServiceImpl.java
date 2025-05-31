@@ -1,8 +1,6 @@
-package com.example.gestorcamras.service.impl;
+package com.example.gestorcamras.pool;
 
 import com.example.gestorcamras.model.Filtro;
-import com.example.gestorcamras.repository.FiltroRepository;
-import com.example.gestorcamras.service.FiltroService;
 import com.example.gestorcamras.dto.FiltroDTO;
 import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;

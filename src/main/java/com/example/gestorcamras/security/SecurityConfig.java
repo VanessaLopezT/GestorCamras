@@ -1,6 +1,5 @@
-package com.example.gestorcamras;
+package com.example.gestorcamras.security;
 
-import com.example.gestorcamras.security.UsuarioDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -74,7 +73,11 @@ public class SecurityConfig {
             "/api/equipos/*/archivos",
             "/api/camaras/*/archivos",
             "/api/archivos/**",
-            "/archivos_multimedia/**"
+            "/archivos_multimedia/**",
+            // Endpoints de imágenes
+            "/api/imagenes/**",
+            "/api/equipos/*/imagenes/**",
+            "/processed/**"
         };
 
         return http
@@ -87,7 +90,9 @@ public class SecurityConfig {
                     .ignoringRequestMatchers(
                         "/api/equipos", "/api/equipos/**",
                         "/api/camaras", "/api/camaras/**",
-                        "/api/archivos/**"
+                        "/api/archivos/**",
+                        "/api/imagenes/**",
+                        "/processed/**"
                     )
                     .ignoringRequestMatchers("/login")
                 )

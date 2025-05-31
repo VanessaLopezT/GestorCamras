@@ -1,4 +1,4 @@
-package com.example.gestorcamras.repository;
+package com.example.gestorcamras.pool;
 
 import com.example.gestorcamras.model.Filtro;
 import org.springframework.data.jpa.repository.JpaRepository;

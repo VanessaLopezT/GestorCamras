@@ -20,4 +20,11 @@ public interface CamaraService {
     List<CamaraDTO> obtenerPorActiva(boolean activa);
     List<CamaraDTO> obtenerPorTipo(String tipo);
     List<CamaraDTO> obtenerPorEquipo(Long idEquipo);
+    
+    /**
+     * Obtiene todas las cámaras de un equipo específico
+     * @param equipoId ID del equipo
+     * @return Lista de cámaras del equipo
+     */
+    List<Camara> obtenerCamarasPorEquipo(Long equipoId);
 }
