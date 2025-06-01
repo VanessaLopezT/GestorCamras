@@ -22,9 +22,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.example.gestorcamras.dto.NotificacionFiltroDTO;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +40,8 @@ import com.example.gestorcamras.repository.CamaraRepository;
 import com.example.gestorcamras.repository.EquipoRepository;
 import com.example.gestorcamras.service.CamaraService;
 import com.example.gestorcamras.service.EquipoService;
+import com.example.gestorcamras.repository.FiltroAplicadoRepository;
+import com.example.gestorcamras.model.FiltroAplicado;
 
 @RestController
 @RequestMapping("/api")
@@ -53,9 +58,49 @@ public class ArchivoMultimediaController {
 
     @Autowired
     private EquipoRepository equipoRepository;
+    
 
     @Autowired
     private EquipoService equipoService;
+    
+    @Autowired
+    private FiltroAplicadoRepository filtroAplicadoRepository;
+    
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ArchivoMultimediaController.class);
+    
+    /**
+     * Endpoint para notificar que se ha aplicado un filtro a una imagen
+     */
+    @PostMapping("/archivos/notificar-filtro")
+    @Transactional
+    public ResponseEntity<?> notificarFiltroAplicado(@RequestBody NotificacionFiltroDTO notificacion) {
+        try {
+            // Registrar en los logs
+            log.info("Filtro aplicado - Archivo ID: {}, Equipo: {}, Cámara: {}, Filtro: {}", 
+                    notificacion.getIdArchivo(), 
+                    notificacion.getIdEquipo(), 
+                    notificacion.getIdCamara(), 
+                    notificacion.getNombreFiltro());
+            
+            // Guardar en la base de datos
+            ArchivoMultimedia archivo = archivoRepository.findById(notificacion.getIdArchivo())
+                .orElseThrow(() -> new RuntimeException("Archivo no encontrado con ID: " + notificacion.getIdArchivo()));
+            
+            FiltroAplicado filtro = new FiltroAplicado();
+            filtro.setArchivo(archivo);
+            filtro.setNombreFiltro(notificacion.getNombreFiltro());
+            filtro.setFechaAplicacion(LocalDateTime.now());
+            filtroAplicadoRepository.save(filtro);
+            
+            log.info("Filtro guardado en la base de datos: {}", filtro);
+            
+            return ResponseEntity.ok().body("Filtro aplicado correctamente");
+        } catch (Exception e) {
+            log.error("Error al registrar el filtro aplicado", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al registrar el filtro: " + e.getMessage());
+        }
+    }
 
     private final Path directorioArchivos = Paths.get("archivos_multimedia");
 
@@ -66,8 +111,6 @@ public class ArchivoMultimediaController {
             throw new RuntimeException("No se pudo crear el directorio para archivos multimedia", e);
         }
     }
-
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ArchivoMultimediaController.class);
 
     @PostMapping("/equipos/{idEquipo}/camaras/{idCamara}/archivo")
     @Transactional

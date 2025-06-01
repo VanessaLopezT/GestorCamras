@@ -2,8 +2,14 @@ package com.example.gestorcamras.builder;
 
 import com.example.gestorcamras.model.ArchivoMultimedia;
 import com.example.gestorcamras.model.Equipo;
+import com.example.gestorcamras.model.FiltroAplicado;
 import com.example.gestorcamras.repository.ArchivoMultimediaRepository;
+import com.example.gestorcamras.repository.FiltroAplicadoRepository;
 import com.example.gestorcamras.service.EquipoService;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
@@ -13,7 +19,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-import java.util.List;
 import java.util.Optional;
 
 @Controller
@@ -22,11 +27,13 @@ public class InformeWebController {
 
     private final EquipoService equipoService;
     private final ArchivoMultimediaRepository archivoMultimediaRepository;
+    private final FiltroAplicadoRepository filtroAplicadoRepository;
 
     @Autowired
-    public InformeWebController(EquipoService equipoService, ArchivoMultimediaRepository archivoMultimediaRepository) {
+    public InformeWebController(EquipoService equipoService, ArchivoMultimediaRepository archivoMultimediaRepository, FiltroAplicadoRepository filtroAplicadoRepository) {
         this.equipoService = equipoService;
         this.archivoMultimediaRepository = archivoMultimediaRepository;
+        this.filtroAplicadoRepository = filtroAplicadoRepository;
     }
 
     @GetMapping("/informes")
@@ -76,6 +83,42 @@ public class InformeWebController {
             List<ArchivoMultimedia> archivos = archivoMultimediaRepository.findByEquipoIdEquipo(equipoId);
             if (archivos != null && !archivos.isEmpty()) {
                 builder.conArchivosMultimedia(archivos);
+                
+                // Obtener información de filtros para estos archivos
+                Map<Long, List<FiltroAplicado>> filtrosPorArchivo = new HashMap<>();
+                // Mapa para agrupar imágenes filtradas por cámara
+                Map<String, List<ArchivoMultimedia>> imagenesFiltradasPorCamara = new HashMap<>();
+                
+                // Obtener todos los filtros aplicados a los archivos de este equipo de una sola consulta
+                List<FiltroAplicado> filtrosDelEquipo = filtroAplicadoRepository.findByArchivoEquipoId(equipoId);
+                
+                // Procesar los filtros obtenidos
+                filtrosDelEquipo.forEach(filtro -> {
+                    ArchivoMultimedia archivo = filtro.getArchivo();
+                    Long idArchivo = archivo.getIdArchivo();
+                    
+                    // Agregar a filtros por archivo
+                    filtrosPorArchivo.computeIfAbsent(idArchivo, k -> new ArrayList<>()).add(filtro);
+                    
+                    // Agrupar por cámara para la sección de imágenes filtradas
+                    String nombreCamara = archivo.getCamara() != null ? 
+                        archivo.getCamara().getNombre() : "Sin cámara";
+                        
+                    imagenesFiltradasPorCamara
+                        .computeIfAbsent(nombreCamara, k -> new ArrayList<>())
+                        .add(archivo);
+                });
+                
+                // Eliminar duplicados en las listas de archivos por cámara
+                imagenesFiltradasPorCamara.forEach((camara, listaArchivos) -> {
+                    List<ArchivoMultimedia> sinDuplicados = listaArchivos.stream()
+                        .distinct()
+                        .collect(java.util.stream.Collectors.toList());
+                    imagenesFiltradasPorCamara.put(camara, sinDuplicados);
+                });
+                
+                model.addAttribute("filtrosPorArchivo", filtrosPorArchivo);
+                model.addAttribute("imagenesFiltradasPorCamara", imagenesFiltradasPorCamara);
             }
             
             // Construir el informe
