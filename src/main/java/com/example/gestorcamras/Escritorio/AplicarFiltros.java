@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import com.example.gestorcamras.dto.NotificacionFiltroDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class AplicarFiltros extends JFrame {
     
@@ -41,6 +43,7 @@ public class AplicarFiltros extends JFrame {
     private Long equipoId;
     private List<Camara> camaras;
     private boolean cargandoAutomaticamente = false;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     
     public AplicarFiltros(IArchivoMultimediaService archivoMultimediaService, CamaraService camaraService, String servidorUrl) {
         this.archivoMultimediaService = archivoMultimediaService;
@@ -375,11 +378,14 @@ public class AplicarFiltros extends JFrame {
                             "Sin imágenes compatibles", JOptionPane.INFORMATION_MESSAGE);
                     }
                     
+                    // Habilitar el botón de aplicar filtro si hay resultados
                     btnAplicarFiltro.setEnabled(modeloTabla.getRowCount() > 0);
                     
-                    // Seleccionar la primera imagen si hay resultados
-                    if (modeloTabla.getRowCount() > 0) {
-                        tablaFotos.setRowSelectionInterval(0, 0);
+                    // No seleccionar automáticamente la primera imagen
+                    // para evitar que se aplique un filtro sin que el usuario lo solicite
+                    if (modeloTabla.getRowCount() > 0 && cargandoAutomaticamente) {
+                        // Limpiar cualquier selección si estamos cargando automáticamente
+                        tablaFotos.clearSelection();
                     }
                 });
             } catch (Exception e) {
@@ -474,6 +480,64 @@ public class AplicarFiltros extends JFrame {
                     lblVistaPrevia.setText("<html><div style='text-align: center;'>Error al cargar la imagen<br>" + 
                                           "<small>" + e.getMessage() + "</small></div>");
                 });
+                e.printStackTrace();
+            }
+        }).start();
+    }
+    
+    /**
+     * Actualiza la vista previa con un mensaje o una imagen
+     */
+    /**
+     * Notifica al servidor que se ha aplicado un filtro a una imagen
+     */
+    private void notificarFiltroAplicado(ArchivoMultimediaDTO archivo, String nombreFiltro) {
+        if (archivo == null || archivo.getIdArchivo() == null || equipoId == null) {
+            System.err.println("No se puede notificar: datos de archivo o equipo no disponibles");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                // Obtener el ID de la cámara seleccionada
+                int selectedCamIndex = cmbCamaras.getSelectedIndex();
+                if (selectedCamIndex < 0 || selectedCamIndex >= camaras.size()) {
+                    throw new IllegalStateException("No hay una cámara seleccionada válida");
+                }
+                
+                Long idCamara = camaras.get(selectedCamIndex).getIdCamara();
+                
+                // Crear DTO de notificación
+                NotificacionFiltroDTO notificacion = new NotificacionFiltroDTO();
+                notificacion.setIdArchivo(archivo.getIdArchivo());
+                notificacion.setIdEquipo(equipoId);
+                notificacion.setIdCamara(idCamara);
+                notificacion.setNombreFiltro(nombreFiltro);
+                notificacion.setNombreArchivoOriginal(archivo.getNombreArchivo());
+                
+                // Enviar notificación
+                String url = servidorUrl + "/api/archivos/notificar-filtro";
+                java.net.URL obj = new java.net.URL(url);
+                java.net.HttpURLConnection con = (java.net.HttpURLConnection) obj.openConnection();
+                con.setRequestMethod("POST");
+                con.setRequestProperty("Content-Type", "application/json");
+                con.setDoOutput(true);
+                
+                // Convertir objeto a JSON
+                String jsonInputString = objectMapper.writeValueAsString(notificacion);
+                
+                try (java.io.OutputStream os = con.getOutputStream()) {
+                    byte[] input = jsonInputString.getBytes("utf-8");
+                    os.write(input, 0, input.length);
+                }
+                
+                int responseCode = con.getResponseCode();
+                if (responseCode != 200) {
+                    System.err.println("Error al notificar filtro. Código: " + responseCode);
+                }
+                
+            } catch (Exception e) {
+                System.err.println("Error al notificar filtro aplicado: " + e.getMessage());
                 e.printStackTrace();
             }
         }).start();
@@ -625,6 +689,9 @@ public class AplicarFiltros extends JFrame {
                             rgbImage.createGraphics().drawImage(filteredImage, 0, 0, java.awt.Color.WHITE, null);
                             javax.imageio.ImageIO.write(rgbImage, "JPEG", new java.io.File(filePath));
                         }
+                        
+                        // Notificar al servidor después de aplicar el filtro exitosamente
+                        notificarFiltroAplicado(archivo, filtroSeleccionado);
                         
                         // Mostrar mensaje de éxito en el hilo de eventos
                         SwingUtilities.invokeLater(() -> {

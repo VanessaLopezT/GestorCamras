@@ -6,7 +6,11 @@ import com.example.gestorcamras.model.Ubicacion;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import com.example.gestorcamras.model.FiltroAplicado;
 import com.example.gestorcamras.model.ArchivoMultimedia;
 
 /**
@@ -18,6 +22,9 @@ public class InformeBuilder {
     private String titulo;
     private LocalDateTime fechaGeneracion;
     private String contenido;
+    
+    // Formateador de fechas
+    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     
     // Información del equipo
     private Equipo equipo;
@@ -251,9 +258,113 @@ public class InformeBuilder {
             sb.append("<div class='sin-camaras'><p>No hay cámaras asociadas a este equipo.</p></div>");
         }
         
+        // Sección de imágenes filtradas agrupadas por cámara
+        boolean hayImagenesFiltradas = archivosMultimedia != null && 
+            archivosMultimedia.stream().anyMatch(a -> a.getFiltrosAplicados() != null && !a.getFiltrosAplicados().isEmpty());
+            
+        if (hayImagenesFiltradas) {
+            sb.append("<div class='seccion-imagenes-filtradas'>");
+            sb.append("<h3><i class='fas fa-filter'></i> Imágenes con Filtros Aplicados</h3>");
+            
+            // Agrupar imágenes filtradas por cámara
+            Map<String, List<ArchivoMultimedia>> imagenesPorCamara = archivosMultimedia.stream()
+                .filter(a -> a.getFiltrosAplicados() != null && !a.getFiltrosAplicados().isEmpty())
+                .collect(Collectors.groupingBy(
+                    a -> a.getCamara() != null ? a.getCamara().getNombre() : "Sin cámara",
+                    LinkedHashMap::new,
+                    Collectors.toList()
+                ));
+                
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            
+            // Crear una sección por cada cámara
+            imagenesPorCamara.forEach((nombreCamara, imagenes) -> {
+                sb.append(String.format("<div class='carpeta-camara'><h4><i class='fas fa-video'></i> Cámara: %s <span class='badge'>%d imágenes</span></h4>", 
+                    nombreCamara, imagenes.size()));
+                
+                sb.append("<div class='galeria-imagenes-filtradas'>");
+                
+                for (ArchivoMultimedia archivo : imagenes) {
+                    sb.append("<div class='tarjeta-imagen-filtrada'>");
+                    sb.append("<div class='info-imagen'>");
+                    sb.append(String.format("<div class='nombre-archivo'>%s</div>", 
+                        archivo.getNombreArchivo() != null ? archivo.getNombreArchivo() : "Sin nombre"));
+                    
+                    sb.append("<div class='fecha-captura'><i class='far fa-calendar-alt'></i> ");
+                    sb.append(archivo.getFechaCaptura() != null ? 
+                        archivo.getFechaCaptura().format(dateFormatter) : "Fecha desconocida");
+                    sb.append("</div>");
+                    
+                    // Mostrar filtros aplicados
+                    List<FiltroAplicado> filtros = archivo.getFiltrosAplicados();
+                    if (filtros != null && !filtros.isEmpty()) {
+                        sb.append("<div class='filtros-aplicados'><i class='fas fa-magic'></i> ");
+                        sb.append(filtros.stream()
+                            .map(FiltroAplicado::getNombreFiltro)
+                            .distinct()
+                            .collect(Collectors.joining(", ")));
+                        sb.append("</div>");
+                    }
+                    
+                    sb.append("</div>"); // Cierre de info-imagen
+                    sb.append("</div>"); // Cierre de tarjeta-imagen-filtrada
+                }
+                
+                sb.append("</div>"); // Cierre de galeria-imagenes-filtradas
+                sb.append("</div>"); // Cierre de carpeta-camara
+            });
+            
+            sb.append("</div>"); // Cierre de seccion-imagenes-filtradas
+            
+            // Agregar estilos para la sección de imágenes filtradas
+            sb.append("<style>");
+            sb.append(".seccion-imagenes-filtradas { margin: 2rem 0; padding: 1.5rem; background: rgba(42, 58, 92, 0.2); border-radius: 8px; }");
+            sb.append(".seccion-imagenes-filtradas h3 { color: var(--accent); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem; }");
+            sb.append(".carpeta-camara { margin-bottom: 2rem; }");
+            sb.append(".carpeta-camara h4 { color: var(--text-primary); margin: 1rem 0; display: flex; align-items: center; gap: 0.5rem; }");
+            sb.append(".carpeta-camara h4 .badge { background: var(--accent); color: var(--primary-dark); padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.8em; }");
+            sb.append(".galeria-imagenes-filtradas { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; }") ;
+            sb.append(".tarjeta-imagen-filtrada { background: var(--primary-light); border-radius: 8px; overflow: hidden; transition: transform 0.2s; padding: 1rem; }") ;
+            sb.append(".tarjeta-imagen-filtrada:hover { transform: translateY(-3px); }");
+            sb.append(".info-imagen { padding: 0; }") ;
+            sb.append(".info-imagen .nombre-archivo { font-weight: 600; margin-bottom: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }");
+            sb.append(".info-imagen .fecha-captura { font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.3rem; }");
+            sb.append(".info-imagen .filtros-aplicados { font-size: 0.8em; color: var(--accent); display: flex; align-items: center; gap: 0.3rem; margin-top: 0.5rem; }");
+            sb.append("</style>");
+        }
+        
         // Sección de archivos multimedia (después de las cámaras)
         if (archivosMultimedia != null && !archivosMultimedia.isEmpty()) {
-            // Contadores por tipo de archivo
+            /* Estilos para los filtros aplicados */
+            sb.append("<style>");
+            sb.append(".filtros-aplicados {");
+            sb.append("max-width: 200px;");
+            sb.append("}");
+            sb.append(".lista-filtros {");
+            sb.append("list-style: none;");
+            sb.append("padding: 0;");
+            sb.append("margin: 0;");
+            sb.append("display: flex;");
+            sb.append("flex-wrap: wrap;");
+            sb.append("gap: 4px;");
+            sb.append("}");
+            sb.append(".filtro-badge {");
+            sb.append("display: inline-block;");
+            sb.append("background-color: var(--primary-light);");
+            sb.append("color: var(--accent);");
+            sb.append("padding: 2px 8px;");
+            sb.append("border-radius: 12px;");
+            sb.append("font-size: 0.8em;");
+            sb.append("white-space: nowrap;");
+            sb.append("}");
+            sb.append("</style>");
+            
+            // Estilos para la tabla de archivos
+            sb.append("<style>");
+            sb.append(".tabla-archivos {");
+            sb.append("}");
+            sb.append("</style>");
+            
             long totalFotos = archivosMultimedia.stream()
                 .filter(a -> a.getTipo() == ArchivoMultimedia.TipoArchivo.FOTO)
                 .count();
@@ -278,6 +389,7 @@ public class InformeBuilder {
             sb.append("<th>Fecha de Captura</th>");
             sb.append("<th>Fecha de Subida</th>");
             sb.append("<th>Cámara</th>");
+            sb.append("<th>Filtros Aplicados</th>");
             sb.append("</tr></thead><tbody>");
             
             DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
@@ -305,6 +417,21 @@ public class InformeBuilder {
                 sb.append("<td>").append(archivo.getCamara() != null && archivo.getCamara().getNombre() != null ? 
                     String.format("<span class='nombre-camara'>%s</span>", archivo.getCamara().getNombre()) : 
                     "<span class='texto-desconocido'>N/A</span>").append("</td>");
+                
+                // Celda para filtros aplicados
+                sb.append("<td class='filtros-aplicados'>");
+                List<String> filtros = archivo.getNombresFiltrosAplicados();
+                if (filtros != null && !filtros.isEmpty()) {
+                    sb.append("<ul class='lista-filtros'>");
+                    for (String filtro : filtros) {
+                        sb.append(String.format("<li><span class='badge filtro-badge'>%s</span></li>", filtro));
+                    }
+                    sb.append("</ul>");
+                } else {
+                    sb.append("<span class='texto-desconocido'>Ninguno</span>");
+                }
+                sb.append("</td>");
+                
                 sb.append("</tr>");
             }
             
