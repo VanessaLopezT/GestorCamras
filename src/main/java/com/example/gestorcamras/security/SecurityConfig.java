@@ -136,8 +136,14 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                     .sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)
                     .sessionFixation().migrateSession()
-                    .maximumSessions(1)
+                    .maximumSessions(-1)  // Permite múltiples sesiones por usuario
+                    .maxSessionsPreventsLogin(false)  // Permite nuevos inicios de sesión
                     .expiredUrl("/login?expired")
+                )
+                // Configuración de la gestión de sesión HTTP
+                .sessionManagement(session -> session
+                    .invalidSessionUrl("/login?invalid-session")
+                    .sessionFixation().migrateSession()
                 )
                 // Configuración de cabeceras de seguridad
                 .headers(headers -> headers
