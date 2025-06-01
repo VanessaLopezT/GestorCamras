@@ -836,13 +836,6 @@ public class ClienteSwingController {
      * @param tipoParam Tipo de archivo (FOTO/VIDEO)
      */
     public void enviarArchivo(String equipoId, String camaraSeleccionada, File archivoSeleccionado, String tipoParam) {
-        log("=== INICIO DE ENVÍO DE ARCHIVO ===");
-        log("Equipo ID: " + equipoId);
-        log("Cámara seleccionada: " + camaraSeleccionada);
-        log("Archivo: " + (archivoSeleccionado != null ? archivoSeleccionado.getAbsolutePath() : "null"));
-        log("Tamaño del archivo: " + (archivoSeleccionado != null ? archivoSeleccionado.length() + " bytes" : "N/A"));
-        log("Tipo de archivo: " + tipoParam);
-        
         if (archivoSeleccionado == null) {
             log("Error: No hay archivo seleccionado para enviar.");
             return;
@@ -861,7 +854,6 @@ public class ClienteSwingController {
         
         // Convertir a mayúsculas para asegurar que coincida con el enum
         final String tipo = tipoParam.toUpperCase();
-        log("Tipo validado: " + tipo);
 
         // Obtener las cámaras del equipo
         Consumer<String> successHandler = new Consumer<String>() {
