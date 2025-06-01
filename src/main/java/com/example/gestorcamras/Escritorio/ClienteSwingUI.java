@@ -23,7 +23,10 @@ import javax.swing.SwingUtilities;
 import com.example.gestorcamras.Escritorio.controller.ClienteSwingController;
 import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
 import com.example.gestorcamras.service.IArchivoMultimediaService;
+
+import javax.swing.Timer;
 import com.example.gestorcamras.service.CamaraService;
+import org.json.JSONArray;
 
 public class ClienteSwingUI extends JFrame {
     private static final long serialVersionUID = 1L;
@@ -321,12 +324,12 @@ public class ClienteSwingUI extends JFrame {
             @Override
             public void run() {
                 if (registroEnCurso[0]) {
-                    return; // Evitar múltiples llamadas simultáneas
+                    log("Ya hay un registro de cámara en curso, omitiendo...");
+                    return;
                 }
                 
                 log("Cargando cámaras para el equipo: " + equipoId);
                 controller.cargarCamaras(equipoId, camaras -> {
-                    // Actualizar la interfaz de usuario en el hilo de eventos de Swing
                     SwingUtilities.invokeLater(() -> {
                         if (camaras != null && camaras.length() > 0) {
                             log("Se encontraron " + camaras.length() + " cámaras");
@@ -337,31 +340,70 @@ public class ClienteSwingUI extends JFrame {
                             log("No se encontraron cámaras. Registrando una nueva cámara local...");
                             registroEnCurso[0] = true; // Marcar que hay un registro en curso
                             
-                            // Si no hay cámaras, intentar registrar una cámara local
-                            log("Registrando nueva cámara local...");
-                            controller.registrarCamaraLocal(equipoId, camaraId -> {
-                                SwingUtilities.invokeLater(() -> {
-                                    registroEnCurso[0] = false; // Restablecer el estado de registro
-                                    if (camaraId != null) {
-                                        log("Cámara local registrada con ID: " + camaraId);
-                                        // Volver a cargar las cámaras inmediatamente
-                                        log("Actualizando lista de cámaras...");
-                                        controller.cargarCamaras(equipoId, camarasActualizadas -> {
-                                            SwingUtilities.invokeLater(() -> {
-                                                if (camarasActualizadas != null && camarasActualizadas.length() > 0) {
-                                                    log("Se encontraron " + camarasActualizadas.length() + " cámaras después del registro");
-                                                    modeloCamarasTabla.setCamaras(camarasActualizadas);
-                                                    log("Tabla de cámaras actualizada después del registro");
-                                                } else {
-                                                    log("No se pudieron cargar las cámaras después del registro");
-                                                }
-                                            });
-                                        });
-                                    } else {
-                                        log("Error al registrar la cámara local");
-                                    }
+                            // Mostrar mensaje informativo al usuario
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "No se encontraron cámaras. Se registrará una nueva cámara local.", 
+                                "Registrando cámara", 
+                                JOptionPane.INFORMATION_MESSAGE);
+                            
+                            // Registrar la nueva cámara
+                            registrarCamaraLocal(equipoId);
+                        }
+                    });
+                });
+            }
+            
+            private void registrarCamaraLocal(String equipoId) {
+                log("Iniciando registro de nueva cámara local...");
+                controller.registrarCamaraLocal(equipoId, camaraId -> {
+                    SwingUtilities.invokeLater(() -> {
+                        registroEnCurso[0] = false; // Restablecer el estado de registro
+                        
+                        if (camaraId != null) {
+                            log("Cámara local registrada exitosamente con ID: " + camaraId);
+                            
+                            // Mostrar mensaje de éxito
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "Cámara local registrada exitosamente con ID: " + camaraId, 
+                                "Registro exitoso", 
+                                JOptionPane.INFORMATION_MESSAGE);
+                            
+                            // Esperar un momento para asegurar que el servidor haya actualizado su estado
+                            Timer timer = new Timer(1500, e -> {
+                                log("Actualizando lista de cámaras después del registro exitoso...");
+                                
+                                // Volver a cargar las cámaras después del registro
+                                controller.cargarCamaras(equipoId, camarasActualizadas -> {
+                                    SwingUtilities.invokeLater(() -> {
+                                        if (camarasActualizadas != null && camarasActualizadas.length() > 0) {
+                                            log("Se encontraron " + camarasActualizadas.length() + " cámaras después del registro");
+                                            modeloCamarasTabla.setCamaras(camarasActualizadas);
+                                            log("Tabla de cámaras actualizada exitosamente");
+                                            
+                                            // Seleccionar automáticamente la cámara recién creada
+                                            if (tablaCamaras.getRowCount() > 0) {
+                                                tablaCamaras.setRowSelectionInterval(0, 0);
+                                                log("Cámara seleccionada automáticamente");
+                                            }
+                                        } else {
+                                            log("No se pudieron cargar las cámaras después del registro");
+                                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                                "No se pudieron cargar las cámaras después del registro. Por favor, intente nuevamente.", 
+                                                "Advertencia", 
+                                                JOptionPane.WARNING_MESSAGE);
+                                        }
+                                    });
                                 });
                             });
+                            timer.setRepeats(false); // Ejecutar solo una vez
+                            timer.start();
+                            
+                        } else {
+                            log("Error al registrar la cámara local");
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "No se pudo registrar la cámara local. Por favor, verifique su conexión e intente nuevamente.", 
+                                "Error al registrar cámara", 
+                                JOptionPane.ERROR_MESSAGE);
                         }
                     });
                 });
@@ -369,6 +411,7 @@ public class ClienteSwingUI extends JFrame {
         }
         
         // Iniciar la carga de cámaras
+        log("Iniciando carga de cámaras...");
         new CargadorCamaras(equipoId, registroEnCurso).run();
     }
     

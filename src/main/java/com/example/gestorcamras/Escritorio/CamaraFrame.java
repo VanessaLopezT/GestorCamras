@@ -142,10 +142,8 @@ public class CamaraFrame extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     if (rutaFoto != null) {
                         etiquetaEstado.setText("Foto guardada: " + rutaFoto);
-                        JOptionPane.showMessageDialog(this,
-                            "Foto guardada exitosamente en: " + rutaFoto,
-                            "Foto Tomada",
-                            JOptionPane.INFORMATION_MESSAGE);
+                        // No mostrar mensaje de confirmación de guardado local
+                        // Solo se mostrará el mensaje de envío al servidor
                     }
                     btnTomarFoto.setEnabled(true);
                 });

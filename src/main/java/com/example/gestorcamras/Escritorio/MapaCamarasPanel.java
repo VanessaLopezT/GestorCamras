@@ -153,8 +153,8 @@ public class MapaCamarasPanel extends JPanel {
                     GeoPosition center = new GeoPosition(centerLat / count, centerLon / count);
                     mapViewer.setAddressLocation(center);
                     
-                    // Always use zoom level 7
-                    mapViewer.setZoom(10);
+                    
+                    mapViewer.setZoom(13);
                 }
             }
             
