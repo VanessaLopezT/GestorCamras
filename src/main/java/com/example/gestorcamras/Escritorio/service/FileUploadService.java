@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 
 public class FileUploadService {
     private final String servidorUrl;
@@ -99,28 +100,30 @@ public class FileUploadService {
             if (responseCode == 200 || responseCode == 201) {
                 log("Archivo enviado correctamente al servidor para la cámara: " + nombreCamara);
                 // Mostrar mensaje de éxito al usuario
-                JOptionPane.showMessageDialog(null, 
-                    "El archivo se ha enviado correctamente al servidor.", 
-                    "Archivo Enviado", 
-                    JOptionPane.INFORMATION_MESSAGE);
+                mostrarMensajeExito("Archivo enviado exitosamente a la cámara: " + nombreCamara);
             } else {
+                String mensajeError = "Error al enviar el archivo. ";
+                String detalles = "";
+                
+                // Determinar el tipo de error
+                if (responseCode == 409) {
+                    mensajeError = "No se pudo procesar la solicitud. ";
+                    detalles = "Otro equipo está realizando una operación similar. Por favor, intente nuevamente en unos momentos.";
+                } else if (responseCode == 500) {
+                    mensajeError = "Error en el servidor. ";
+                    detalles = "El servidor encontró un error al procesar su solicitud. Por favor, intente más tarde.";
+                } else if (responseCode == 503) {
+                    mensajeError = "Servicio no disponible. ";
+                    detalles = "El servidor está ocupado procesando otras solicitudes. Por favor, intente nuevamente en unos momentos.";
+                } else {
+                    detalles = "Código de error: " + responseCode;
+                }
+                
                 log("Error al enviar archivo. Código: " + responseCode);
                 log("Respuesta del servidor: " + respuesta);
                 
-                // Intentar obtener más información sobre el error
-                if (responseCode == 400) {
-                    log("Posibles causas del error 400:");
-                    log("1. El formato del formulario multipart no es el esperado");
-                    log("2. Falta algún parámetro requerido");
-                    log("3. El tipo de archivo no es compatible");
-                    log("4. Problemas de validación en el servidor");
-                    log("5. Problemas de autenticación/autorización");
-                    
-                    // Mostrar más detalles si están disponibles
-                    if (respuesta != null && !respuesta.isEmpty()) {
-                        log("Detalles del error: " + respuesta);
-                    }
-                }
+                // Mostrar mensaje de error detallado al usuario
+                mostrarError(mensajeError, detalles);
             }
         } catch (Exception e) {
             log("=== ERROR AL ENVIAR ARCHIVO ===");
@@ -203,11 +206,47 @@ public class FileUploadService {
         }
     }
     
-    private void log(String message) {
+    private void log(String mensaje) {
         if (logConsumer != null) {
-            logConsumer.accept(message);
+            logConsumer.accept("[FileUploadService] " + mensaje);
         } else {
-            System.out.println("[FileUploadService] " + message);
+            System.out.println("[FileUploadService] " + mensaje);
         }
+    }
+    
+    /**
+     * Muestra un mensaje de error al usuario
+     * @param titulo Título del mensaje de error
+     * @param mensajeError Mensaje de error a mostrar
+     */
+    /**
+     * Muestra un mensaje de error al usuario
+     * @param titulo Título del mensaje de error
+     * @param mensajeError Mensaje de error a mostrar
+     */
+    private void mostrarError(String titulo, String mensajeError) {
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(
+                null, 
+                "<html><body><p style='width: 300px;'>" + mensajeError + "</p></body></html>",
+                titulo,
+                JOptionPane.ERROR_MESSAGE
+            );
+        });
+    }
+    
+    /**
+     * Muestra un mensaje de éxito al usuario
+     * @param mensajeExito Mensaje de éxito a mostrar
+     */
+    private void mostrarMensajeExito(String mensajeExito) {
+        SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(
+                null, 
+                "<html><body><p style='width: 300px;'>" + mensajeExito + "</p></body></html>",
+                "Operación exitosa",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+        });
     }
 }

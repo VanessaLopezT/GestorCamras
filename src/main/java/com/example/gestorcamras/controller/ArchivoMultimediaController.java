@@ -102,12 +102,34 @@ public class ArchivoMultimediaController {
     }
 
     private final Path directorioArchivos = Paths.get("archivos_multimedia");
+    private final Object lock = new Object(); // Objeto para sincronización
 
     public ArchivoMultimediaController() {
         try {
-            Files.createDirectories(directorioArchivos);
+            // Crear directorio base de forma segura
+            synchronized(lock) {
+                if (!Files.exists(directorioArchivos)) {
+                    Files.createDirectories(directorioArchivos);
+                    log.info("Directorio base de archivos multimedia creado en: {}", directorioArchivos.toAbsolutePath());
+                }
+            }
         } catch (IOException e) {
+            log.error("Error crítico al crear el directorio base para archivos multimedia", e);
             throw new RuntimeException("No se pudo crear el directorio para archivos multimedia", e);
+        }
+    }
+    
+    /**
+     * Crea un directorio de forma segura, manejando condiciones de carrera
+     */
+    private void crearDirectorioSeguro(Path directorio) throws IOException {
+        if (!Files.exists(directorio)) {
+            synchronized(lock) {
+                if (!Files.exists(directorio)) { // Doble verificación dentro del bloque sincronizado
+                    Files.createDirectories(directorio);
+                    log.debug("Directorio creado: {}", directorio);
+                }
+            }
         }
     }
 
@@ -174,21 +196,25 @@ public class ArchivoMultimediaController {
                 }
             }
 
-            // Crear directorio si no existe
+            // Crear estructura de directorios de forma segura
             Path directorioFinal = directorioArchivos
                 .resolve(equipo.getIdEquipo().toString())
                 .resolve(camara.getIdCamara().toString())
                 .resolve(tipo.toLowerCase());
             
-            log.debug("Creando directorio para el archivo: {}", directorioFinal);
+            log.debug("Verificando directorio para el archivo: {}", directorioFinal);
             try {
-                Files.createDirectories(directorioFinal);
-                log.info("Directorio creado exitosamente: {}", directorioFinal);
+                // Crear directorios de forma segura
+                crearDirectorioSeguro(directorioFinal.getParent().getParent()); // directorio del equipo
+                crearDirectorioSeguro(directorioFinal.getParent()); // directorio de la cámara
+                crearDirectorioSeguro(directorioFinal); // directorio del tipo de archivo
+                
+                log.info("Estructura de directorios verificada/creada: {}", directorioFinal);
             } catch (IOException e) {
-                String errorMsg = "Error al crear directorio: " + e.getMessage();
+                String errorMsg = "Error al verificar/crear directorios: " + e.getMessage();
                 log.error(errorMsg, e);
-                return ResponseEntity.internalServerError()
-                    .body(Map.of("error", errorMsg));
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", errorMsg, "details", "No se pudo crear la estructura de directorios necesaria"));
             }
 
             // Generar nombre único para el archivo
@@ -215,16 +241,34 @@ public class ArchivoMultimediaController {
             Path rutaArchivo = directorioFinal.resolve(nombreArchivo);
             log.debug("Ruta completa del archivo: {}", rutaArchivo);
 
-            // Guardar archivo en disco
-            log.debug("Guardando archivo en disco...");
+            // Guardar archivo en disco con manejo de concurrencia
+            log.debug("Iniciando guardado del archivo en disco...");
             try (InputStream inputStream = archivo.getInputStream()) {
-                long bytesCopied = Files.copy(inputStream, rutaArchivo, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                log.info("Archivo guardado exitosamente. Tamaño: {} bytes", bytesCopied);
+                // Crear un archivo temporal primero
+                Path tempFile = Files.createTempFile(directorioFinal, "upload_", ".tmp");
+                try {
+                    // Copiar a archivo temporal
+                    long bytesCopied = Files.copy(inputStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    log.debug("Archivo temporal creado: {} ({} bytes)", tempFile, bytesCopied);
+                    
+                    // Mover el archivo temporal al destino final (operación atómica)
+                    Files.move(tempFile, rutaArchivo, java.nio.file.StandardCopyOption.REPLACE_EXISTING, 
+                              java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                    
+                    log.info("Archivo guardado exitosamente en: {} ({} bytes)", rutaArchivo, bytesCopied);
+                } catch (Exception e) {
+                    // Limpiar archivo temporal en caso de error
+                    try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+                    throw e;
+                }
             } catch (IOException e) {
                 String errorMsg = "Error al guardar el archivo: " + e.getMessage();
                 log.error(errorMsg, e);
-                return ResponseEntity.internalServerError()
-                    .body(Map.of("error", errorMsg));
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                        "error", "Error al guardar el archivo en el servidor",
+                        "details", errorMsg
+                    ));
             }
 
             // Crear registro en base de datos
