@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import com.example.gestorcamras.dto.NotificacionFiltroDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -312,8 +313,15 @@ public class AplicarFiltros extends JFrame {
         
         new Thread(() -> {
             try {
+                // Obtener solo los archivos de esta cámara y este equipo
                 List<ArchivoMultimediaDTO> archivos = archivoMultimediaService
-                    .obtenerArchivosPorCamara(camaraSeleccionada.getIdCamara());
+                    .obtenerArchivosPorCamara(camaraSeleccionada.getIdCamara())
+                    .stream()
+                    .filter(archivo -> {
+                        // Filtrar por equipoId para asegurar que solo se muestren los archivos de este equipo
+                        return archivo.getEquipoId() != null && archivo.getEquipoId().equals(equipoId);
+                    })
+                    .collect(Collectors.toList());
                 
                 SwingUtilities.invokeLater(() -> {
                     if (archivos == null || archivos.isEmpty()) {
@@ -330,11 +338,12 @@ public class AplicarFiltros extends JFrame {
                     int fotosMostradas = 0;
                     Set<String> tiposEncontrados = new HashSet<>();
                     List<ArchivoMultimediaDTO> imagenesFiltradas = new ArrayList<>();
+                    // Formateador de fecha
                     SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
                     
                     for (ArchivoMultimediaDTO archivo : archivos) {
                         String tipo = archivo.getTipo() != null ? archivo.getTipo().toUpperCase() : "";
-                        String nombreArchivo = archivo.getNombreArchivo().toLowerCase();
+                        String nombreArchivo = archivo.getNombreArchivo() != null ? archivo.getNombreArchivo().toLowerCase() : "";
                         
                         tiposEncontrados.add(tipo);
                         
@@ -345,12 +354,19 @@ public class AplicarFiltros extends JFrame {
                             // Formatear la fecha de captura de manera segura
                             String fechaFormateada = "N/A";
                             try {
-                                if (archivo.getFechaCaptura() != null) {
-                                    fechaFormateada = sdf.format(archivo.getFechaCaptura());
+                                String fechaStr = archivo.getFechaCaptura();
+                                if (fechaStr != null && !fechaStr.isEmpty()) {
+                                    // Intentar formatear la fecha si está en un formato conocido
+                                    try {
+                                        fechaFormateada = sdf.format(sdf.parse(fechaStr));
+                                    } catch (Exception e) {
+                                        // Si no se puede formatear, usar el valor original
+                                        fechaFormateada = fechaStr;
+                                    }
                                 }
                             } catch (Exception e) {
-                                // Si hay algún error al formatear, mostramos la fecha como está
-                                fechaFormateada = String.valueOf(archivo.getFechaCaptura());
+                                // Si hay algún error, mostramos N/A
+                                fechaFormateada = "N/A";
                             }
                             
                             modeloTabla.addRow(new Object[]{

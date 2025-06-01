@@ -179,12 +179,28 @@ public class ClienteSwingUI extends JFrame {
                 CamaraService camaraService = controller.getCamaraService();
                 
                 if (archivoService != null && camaraService != null) {
-                    // Obtener la URL base del servidor del controlador
-                    String servidorUrl = controller.getServidorUrl();
-                    AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService, servidorUrl);
-                    // Establecer el ID del equipo para el diálogo de filtros
-                    filtros.setEquipoId(1L); // TODO: Reemplazar con el ID real del equipo del contexto de la aplicación
-                    filtros.mostrar();
+                    // Verificar que haya un equipo registrado
+                    if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+                        JOptionPane.showMessageDialog(this, 
+                            "No hay un equipo registrado. Por favor, registre un equipo primero.",
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                    
+                    try {
+                        // Obtener la URL base del servidor del controlador
+                        String servidorUrl = controller.getServidorUrl();
+                        AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService, servidorUrl);
+                        // Establecer el ID del equipo para el diálogo de filtros
+                        filtros.setEquipoId(Long.parseLong(equipoIdGenerado));
+                        filtros.mostrar();
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Error: El ID del equipo no es válido: " + equipoIdGenerado,
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                    }
                 } else {
                     JOptionPane.showMessageDialog(this, 
                         "No se pudieron cargar los servicios necesarios para los filtros.",

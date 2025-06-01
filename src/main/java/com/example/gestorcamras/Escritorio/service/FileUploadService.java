@@ -10,6 +10,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import javax.swing.JOptionPane;
 
 public class FileUploadService {
     private final String servidorUrl;
@@ -96,7 +97,12 @@ public class FileUploadService {
             log("=============================");
             
             if (responseCode == 200 || responseCode == 201) {
-                log("Archivo enviado correctamente a la cámara: " + nombreCamara);
+                log("Archivo enviado correctamente al servidor para la cámara: " + nombreCamara);
+                // Mostrar mensaje de éxito al usuario
+                JOptionPane.showMessageDialog(null, 
+                    "El archivo se ha enviado correctamente al servidor.", 
+                    "Archivo Enviado", 
+                    JOptionPane.INFORMATION_MESSAGE);
             } else {
                 log("Error al enviar archivo. Código: " + responseCode);
                 log("Respuesta del servidor: " + respuesta);

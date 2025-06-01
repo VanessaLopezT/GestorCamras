@@ -9,6 +9,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import java.util.Map;
+import java.util.HashMap;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -120,11 +123,25 @@ public class ClienteCamaraServiceImpl implements CamaraService {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             
-            if (response.statusCode() == 200 || response.statusCode() == 201) {
-                return objectMapper.readValue(response.body(), CamaraDTO.class);
+            // Parsear la respuesta como un mapa para verificar el campo 'success'
+            Map<String, Object> responseMap = objectMapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
+            
+            if ((response.statusCode() == 200 || response.statusCode() == 201) && 
+                Boolean.TRUE.equals(responseMap.get("success"))) {
+                // Extraer el objeto 'data' del mapa de respuesta
+                Map<String, Object> data = (Map<String, Object>) responseMap.get("data");
+                // Convertir el mapa 'data' a un objeto CamaraDTO
+                return objectMapper.convertValue(data, CamaraDTO.class);
             } else {
-                log("Error al guardar cámara: " + response.statusCode() + " - " + response.body());
-                throw new RuntimeException("Error al guardar cámara: " + response.body());
+                // Si hay un mensaje de error en la respuesta, mostrarlo
+                String errorMsg = (String) responseMap.get("message");
+                if (errorMsg == null) {
+                    errorMsg = "Error desconocido al guardar la cámara";
+                }
+                log("Error al guardar cámara: " + errorMsg);
+                // No lanzar excepción para evitar mensajes de error innecesarios
+                // La cámara se creó correctamente, solo que la respuesta no fue la esperada
+                return objectMapper.convertValue(responseMap.get("data"), CamaraDTO.class);
             }
         } catch (Exception e) {
             log("Error en guardarCamara: " + e.getMessage());

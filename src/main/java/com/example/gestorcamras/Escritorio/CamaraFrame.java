@@ -222,10 +222,8 @@ public class CamaraFrame extends JFrame {
                     
                     if (rutaVideo != null) {
                         etiquetaEstado.setText("Grabación guardada: " + rutaVideo);
-                        JOptionPane.showMessageDialog(this,
-                            "Grabación guardada exitosamente en: " + rutaVideo,
-                            "Grabación Completada",
-                            JOptionPane.INFORMATION_MESSAGE);
+                        // No mostrar mensaje de confirmación de guardado local
+                        // Solo se mostrará el mensaje de envío al servidor
                     } else {
                         etiquetaEstado.setText("Listo");
                     }

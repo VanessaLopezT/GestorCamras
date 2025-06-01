@@ -41,27 +41,20 @@ public class CamaraController {
     }
 
     @PostMapping
-    public ResponseEntity<CamaraDTO> crearCamara(@RequestBody CamaraDTO camaraDTO) {
+    public ResponseEntity<Map<String, Object>> crearCamara(@RequestBody CamaraDTO camaraDTO) {
+        Map<String, Object> response = new HashMap<>();
+        
         try {
+            // Validar campos requeridos
+            if (camaraDTO.getNombre() == null || camaraDTO.getNombre().trim().isEmpty()) {
+                response.put("success", false);
+                response.put("message", "El nombre de la cámara es requerido");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
             // Establecer valores por defecto si no están presentes
             if (camaraDTO.getFechaRegistro() == null) {
                 camaraDTO.setFechaRegistro(LocalDateTime.now());
-            }
-            
-            // Si se proporcionan coordenadas pero no hay ID de ubicación, intentar obtener la dirección
-            if ((camaraDTO.getLatitud() != null && camaraDTO.getLongitud() != null) && 
-                (camaraDTO.getUbicacionId() == null || camaraDTO.getDireccion() == null)) {
-                
-                // Si no hay dirección, el servicio de geocodificación la obtendrá de forma asíncrona
-                if (camaraDTO.getDireccion() == null) {
-                    // El servicio de geocodificación se encargará de obtener la dirección
-                    // después de guardar la cámara
-                }
-            }
-            
-            // Validar campos requeridos
-            if (camaraDTO.getNombre() == null || camaraDTO.getNombre().trim().isEmpty()) {
-                return ResponseEntity.badRequest().body(null);
             }
             
             // Si la IP no está establecida, establecer un valor por defecto
@@ -75,8 +68,14 @@ public class CamaraController {
             // Guardar la cámara
             CamaraDTO guardada = camaraService.guardarCamara(camaraDTO);
             
+            if (guardada == null) {
+                response.put("success", false);
+                response.put("message", "No se pudo guardar la cámara");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            }
+            
             // Obtener la cámara recién guardada para asegurar que tenemos los datos más recientes
-            if (guardada != null && guardada.getIdCamara() != null) {
+            if (guardada.getIdCamara() != null) {
                 guardada = camaraService.obtenerPorId(guardada.getIdCamara())
                     .orElse(guardada); // Si no se puede obtener, usar la que ya tenemos
                 
@@ -94,19 +93,25 @@ public class CamaraController {
                         // Registrar la acción
                         System.out.println("Notificación WebSocket enviada para la cámara del equipo: " + guardada.getEquipoId());
                     } catch (Exception e) {
+                        // No fallar la operación principal si hay un error en la notificación
                         System.err.println("Error al enviar notificación WebSocket: " + e.getMessage());
-                        e.printStackTrace();
                     }
-                } else {
-                    System.err.println("No se pudo enviar notificación: equipoId es nulo");
                 }
             }
             
-            return ResponseEntity.ok(guardada);
+            response.put("success", true);
+            response.put("message", "Cámara guardada exitosamente");
+            response.put("data", guardada);
+            return ResponseEntity.ok(response);
+            
         } catch (Exception e) {
-            System.err.println("Error al guardar la cámara: " + e.getMessage());
+            String errorMsg = "Error al guardar la cámara: " + e.getMessage();
+            System.err.println(errorMsg);
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+            
+            response.put("success", false);
+            response.put("message", errorMsg);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
