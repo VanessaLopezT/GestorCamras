@@ -1,7 +1,9 @@
 package com.example.gestorcamras.pool;
 
 import com.example.gestorcamras.filtros.FiltroImagen;
-import com.example.gestorcamras.filtros.FiltroFactory;
+import com.example.gestorcamras.filtros.PoolFiltros;
+import com.example.gestorcamras.filtros.impl.FiltroEscalaGrises;
+import com.example.gestorcamras.filtros.impl.FiltroSepia;
 import org.springframework.stereotype.Component;
 
 import jakarta.annotation.PreDestroy;
@@ -34,9 +36,18 @@ public class FiltroObjectPool extends AbstractObjectPool<FiltroImagen> {
     }
     
     @Override
+    @SuppressWarnings("unchecked")
     public FiltroImagen crearFiltro(String tipo) {
         try {
-            return FiltroFactory.crearFiltro(tipo);
+            // Mapear el tipo de filtro a la clase correspondiente
+            Class<? extends FiltroImagen> filtroClass = (Class<? extends FiltroImagen>) switch (tipo.toLowerCase()) {
+                case "escala_grises" -> FiltroEscalaGrises.class;
+                case "sepia" -> FiltroSepia.class;
+                default -> throw new IllegalArgumentException("Tipo de filtro no soportado: " + tipo);
+            };
+            
+            // Obtener el filtro del pool
+            return PoolFiltros.obtenerFiltro(filtroClass);
         } catch (Exception e) {
             throw new IllegalArgumentException("No se pudo crear el filtro de tipo: " + tipo, e);
         }
@@ -50,6 +61,7 @@ public class FiltroObjectPool extends AbstractObjectPool<FiltroImagen> {
     @Override
     public void limpiarFiltro(FiltroImagen filtro) {
         if (filtro != null) {
+            PoolFiltros.liberarFiltro(filtro);
             filtro.reset();
         }
     }
@@ -58,8 +70,8 @@ public class FiltroObjectPool extends AbstractObjectPool<FiltroImagen> {
     @PreDestroy
     public void cerrar() {
         super.cerrar();
-        pools.values().forEach(BlockingQueue::clear);
-        pools.clear();
+        // No es necesario limpiar manualmente ya que PoolFiltros maneja su propio ciclo de vida
+        // Los filtros serán recolectados por el recolector de basura cuando sea apropiado
     }
     
     /**

@@ -1,6 +1,11 @@
 package com.example.gestorcamras.Escritorio;
 
 import com.example.gestorcamras.Escritorio.model.ArchivoMultimediaDTO;
+import com.example.gestorcamras.filtros.FiltroImagen;
+import com.example.gestorcamras.filtros.PoolFiltros;
+import com.example.gestorcamras.filtros.impl.FiltroEscalaGrises;
+import com.example.gestorcamras.filtros.impl.FiltroSepia;
+import com.example.gestorcamras.filtros.impl.FiltroBrillo;
 import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.service.IArchivoMultimediaService;
 import com.example.gestorcamras.service.CamaraService;
@@ -8,7 +13,10 @@ import com.example.gestorcamras.service.CamaraService;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,31 +28,101 @@ public class AplicarFiltros extends JFrame {
     private DefaultTableModel modeloTabla;
     private JButton btnAplicarFiltro;
     private JButton btnCerrar;
+    private JLabel lblVistaPrevia;
+    private JPanel panelVistaPrevia;
+    private List<ArchivoMultimediaDTO> archivosActuales;
     
     private final transient IArchivoMultimediaService archivoMultimediaService;
     private final transient CamaraService camaraService;
+    private final String servidorUrl;
     
-    private Long equipoId; // ID del equipo actual
-    private List<Camara> camaras; // Lista de cámaras del equipo
+    private Long equipoId;
+    private List<Camara> camaras;
+    private boolean cargandoAutomaticamente = false;
     
-    public AplicarFiltros(IArchivoMultimediaService archivoMultimediaService, CamaraService camaraService) {
+    public AplicarFiltros(IArchivoMultimediaService archivoMultimediaService, CamaraService camaraService, String servidorUrl) {
         this.archivoMultimediaService = archivoMultimediaService;
         this.camaraService = camaraService;
-        // Inicializar la ventana en el hilo de eventos de Swing
-        SwingUtilities.invokeLater(() -> {
-            inicializarUI();
-            // No mostramos la ventana aquí, se mostrará cuando se llame a setVisible(true)
-        });
+        this.servidorUrl = servidorUrl.endsWith("/") ? 
+                          servidorUrl.substring(0, servidorUrl.length() - 1) : 
+                          servidorUrl;
+        this.archivosActuales = new ArrayList<>();
+        
+        SwingUtilities.invokeLater(this::inicializarUI);
     }
     
-    // Método para mostrar la ventana
     public void mostrar() {
         setVisible(true);
     }
     
+    /**
+     * Muestra una ventana con las imágenes filtradas guardadas en la carpeta fotos_filtradas
+     */
+    private void mostrarImagenesFiltradas() {
+        String projectPath = System.getProperty("user.dir");
+        String outputDir = projectPath + File.separator + "fotos_filtradas";
+        File directorio = new File(outputDir);
+        
+        // Verificar si el directorio existe
+        if (!directorio.exists() || !directorio.isDirectory()) {
+            JOptionPane.showMessageDialog(this, 
+                "No se encontró la carpeta de imágenes filtradas.",
+                "Carpeta no encontrada", 
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        // Obtener archivos de imagen del directorio
+        File[] archivos = directorio.listFiles((dir, name) -> 
+            name.toLowerCase().endsWith(".jpg") || 
+            name.toLowerCase().endsWith(".jpeg") ||
+            name.toLowerCase().endsWith(".png")
+        );
+        
+        if (archivos == null || archivos.length == 0) {
+            JOptionPane.showMessageDialog(this, 
+                "No se encontraron imágenes filtradas en la carpeta.",
+                "Sin imágenes", 
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        // Crear ventana para mostrar las imágenes
+        JDialog dialog = new JDialog(this, "Imágenes Filtradas", false);
+        dialog.setSize(800, 600);
+        dialog.setLocationRelativeTo(this);
+        
+        // Panel con scroll para las imágenes
+        JPanel panelImagenes = new JPanel(new GridLayout(0, 3, 5, 5)); // 3 columnas
+        panelImagenes.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        // Cargar y mostrar cada imagen
+        for (File archivo : archivos) {
+            try {
+                ImageIcon icono = new ImageIcon(archivo.getAbsolutePath());
+                // Escalar la imagen manteniendo la relación de aspecto
+                Image img = icono.getImage();
+                int ancho = 200; // Ancho fijo para cada miniatura
+                int alto = (int) (ancho * ((double) icono.getIconHeight() / icono.getIconWidth()));
+                Image imgEscalada = img.getScaledInstance(ancho, alto, Image.SCALE_SMOOTH);
+                
+                JLabel lblImagen = new JLabel(new ImageIcon(imgEscalada));
+                lblImagen.setBorder(BorderFactory.createTitledBorder(archivo.getName()));
+                panelImagenes.add(lblImagen);
+            } catch (Exception e) {
+                System.err.println("Error al cargar la imagen: " + archivo.getName());
+                e.printStackTrace();
+            }
+        }
+        
+        JScrollPane scrollPane = new JScrollPane(panelImagenes);
+        dialog.add(scrollPane);
+        dialog.setVisible(true);
+    }
+    
     private void inicializarUI() {
         setTitle("Aplicar Filtros a Fotos");
-        setSize(800, 600);
+        setSize(1000, 700);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         
@@ -52,11 +130,19 @@ public class AplicarFiltros extends JFrame {
         JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
         panelPrincipal.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
+        // Panel para el contenido principal (tabla y vista previa)
+        JPanel panelContenido = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 1.0;
+        gbc.insets = new Insets(5, 5, 5, 5);
+        
         // Panel superior para la selección de cámara
         JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panelSuperior.add(new JLabel("Seleccionar Cámara: "));
         cmbCamaras = new JComboBox<>();
-        cmbCamaras.setPreferredSize(new Dimension(400, 25)); // Aumentado de 200 a 400 píxeles de ancho
+        cmbCamaras.setPreferredSize(new Dimension(400, 25));
         panelSuperior.add(cmbCamaras);
         
         // Botón para cargar fotos de la cámara seleccionada
@@ -64,24 +150,70 @@ public class AplicarFiltros extends JFrame {
         btnCargarFotos.addActionListener(e -> cargarFotosPorCamara());
         panelSuperior.add(btnCargarFotos);
         
-        // Tabla para mostrar las fotos
+        // Panel de vista previa
+        panelVistaPrevia = new JPanel(new BorderLayout());
+        panelVistaPrevia.setBorder(BorderFactory.createTitledBorder("Vista Previa"));
+        panelVistaPrevia.setPreferredSize(new Dimension(300, 300));
+        
+        lblVistaPrevia = new JLabel("Seleccione una imagen para previsualizar", JLabel.CENTER);
+        panelVistaPrevia.add(lblVistaPrevia, BorderLayout.CENTER);
+        
+        // Panel para la tabla con título
+        JPanel panelTabla = new JPanel(new BorderLayout());
+        panelTabla.setBorder(BorderFactory.createTitledBorder("Imágenes Disponibles"));
+        
+        // Configuración de la tabla
         modeloTabla = new DefaultTableModel() {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Hacer que la tabla no sea editable
+                return false;
             }
         };
+        
         modeloTabla.addColumn("ID");
         modeloTabla.addColumn("Nombre");
-        modeloTabla.addColumn("Fecha Creación");
+        modeloTabla.addColumn("Fecha");
         modeloTabla.addColumn("Tipo");
         
         tablaFotos = new JTable(modeloTabla);
         tablaFotos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        JScrollPane scrollPane = new JScrollPane(tablaFotos);
+        
+        // Agregar listener para la selección de filas
+        tablaFotos.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting() && tablaFotos.getSelectedRow() >= 0) {
+                int selectedRow = tablaFotos.getSelectedRow();
+                if (selectedRow >= 0 && selectedRow < archivosActuales.size()) {
+                    mostrarVistaPrevia(archivosActuales.get(selectedRow));
+                }
+                btnAplicarFiltro.setEnabled(selectedRow != -1);
+            }
+        });
+        
+        JScrollPane scrollTabla = new JScrollPane(tablaFotos);
+        panelTabla.add(scrollTabla, BorderLayout.CENTER);
+        
+        // Configurar el diseño del panel de contenido
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 0.6; // 60% del ancho para la tabla
+        gbc.weighty = 1.0;
+        panelContenido.add(panelTabla, gbc);
+        
+        gbc.gridx = 1;
+        gbc.weightx = 0.4; // 40% del ancho para la vista previa
+        panelContenido.add(panelVistaPrevia, gbc);
         
         // Panel inferior para botones
-        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel panelInferior = new JPanel(new BorderLayout(10, 0));
+        
+        // Botón para ver imágenes filtradas (izquierda)
+        JButton btnVerFiltradas = new JButton("Ver Imágenes Filtradas");
+        btnVerFiltradas.addActionListener(e -> mostrarImagenesFiltradas());
+        panelInferior.add(btnVerFiltradas, BorderLayout.WEST);
+        
+        // Panel para los botones de la derecha
+        JPanel panelBotonesDerecha = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        
         btnAplicarFiltro = new JButton("Aplicar Filtro");
         btnAplicarFiltro.setEnabled(false);
         btnAplicarFiltro.addActionListener(e -> aplicarFiltroSeleccionado());
@@ -89,47 +221,26 @@ public class AplicarFiltros extends JFrame {
         btnCerrar = new JButton("Cerrar");
         btnCerrar.addActionListener(e -> this.dispose());
         
-        panelInferior.add(btnAplicarFiltro);
-        panelInferior.add(btnCerrar);
+        panelBotonesDerecha.add(btnAplicarFiltro);
+        panelBotonesDerecha.add(btnCerrar);
+        
+        panelInferior.add(panelBotonesDerecha, BorderLayout.EAST);
         
         // Agregar componentes al panel principal
         panelPrincipal.add(panelSuperior, BorderLayout.NORTH);
-        panelPrincipal.add(scrollPane, BorderLayout.CENTER);
+        panelPrincipal.add(panelContenido, BorderLayout.CENTER);
         panelPrincipal.add(panelInferior, BorderLayout.SOUTH);
         
-        // Habilitar/deshabilitar botón de aplicar filtro según selección
-        tablaFotos.getSelectionModel().addListSelectionListener(e -> {
-            btnAplicarFiltro.setEnabled(tablaFotos.getSelectedRow() != -1);
-        });
-        
         add(panelPrincipal);
-        setVisible(true);
     }
     
     /**
      * Establece el ID del equipo y carga las cámaras correspondientes
-     * @param equipoId ID del equipo
      */
     public void setEquipoId(Long equipoId) {
-        if (equipoId == null) {
-            JOptionPane.showMessageDialog(this, 
-                "No se ha proporcionado un ID de equipo válido.", 
-                "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
         this.equipoId = equipoId;
-        
-        // Asegurarse de que la UI esté inicializada antes de cargar las cámaras
-        if (cmbCamaras == null) {
-            // Si la UI no está lista, programar la carga de cámaras para cuando lo esté
-            SwingUtilities.invokeLater(this::cargarCamaras);
-        } else {
-            cargarCamaras();
-        }
+        cargarCamaras();
     }
-    
-    private boolean cargandoAutomaticamente = false;
     
     private void cargarCamaras() {
         if (equipoId == null) {
@@ -139,13 +250,10 @@ public class AplicarFiltros extends JFrame {
             return;
         }
         
-        // Ejecutar la carga en un hilo separado para no bloquear la UI
         new Thread(() -> {
             try {
-                // Obtener las cámaras del equipo
                 List<Camara> camarasCargadas = camaraService.obtenerCamarasPorEquipo(equipoId);
                 
-                // Actualizar la UI en el hilo de eventos
                 SwingUtilities.invokeLater(() -> {
                     cmbCamaras.removeAllItems();
                     this.camaras = camarasCargadas;
@@ -158,18 +266,14 @@ public class AplicarFiltros extends JFrame {
                         // Seleccionar la primera cámara automáticamente
                         if (cmbCamaras.getItemCount() > 0) {
                             cmbCamaras.setSelectedIndex(0);
-                            // Cargar fotos de la primera cámara automáticamente
                             cargandoAutomaticamente = true;
                             cargarFotosPorCamara();
                         }
-                    } else {
-                        // No mostrar mensaje cuando no hay cámaras
                     }
                 });
             } catch (Exception e) {
-                // Manejar errores en el hilo de eventos
                 SwingUtilities.invokeLater(() -> {
-                    JOptionPane.showMessageDialog(AplicarFiltros.this, 
+                    JOptionPane.showMessageDialog(this, 
                         "Error al cargar las cámaras: " + e.getMessage(), 
                         "Error", JOptionPane.ERROR_MESSAGE);
                     e.printStackTrace();
@@ -179,10 +283,11 @@ public class AplicarFiltros extends JFrame {
     }
     
     private void cargarFotosPorCamara() {
-        // Limpiar tabla actual
+        // Limpiar tabla actual y vista previa
         modeloTabla.setRowCount(0);
+        actualizarVistaPrevia(null);
+        archivosActuales.clear();
         
-        // Verificar que haya cámaras disponibles
         if (camaras == null || camaras.isEmpty()) {
             JOptionPane.showMessageDialog(this, 
                 "No hay cámaras disponibles para mostrar.", 
@@ -200,68 +305,85 @@ public class AplicarFiltros extends JFrame {
         
         Camara camaraSeleccionada = camaras.get(selectedIndex);
         
-        // Ejecutar en un hilo separado para no bloquear la UI
         new Thread(() -> {
             try {
-                // Obtener las fotos de la cámara seleccionada
-                List<ArchivoMultimediaDTO> archivos = archivoMultimediaService.obtenerArchivosPorCamara(camaraSeleccionada.getIdCamara());
+                List<ArchivoMultimediaDTO> archivos = archivoMultimediaService
+                    .obtenerArchivosPorCamara(camaraSeleccionada.getIdCamara());
                 
-                // Actualizar la UI en el hilo de eventos
                 SwingUtilities.invokeLater(() -> {
                     if (archivos == null || archivos.isEmpty()) {
-                        // Solo mostrar el mensaje si no es una carga automática inicial
                         if (!cargandoAutomaticamente) {
-                            JOptionPane.showMessageDialog(AplicarFiltros.this, 
+                            JOptionPane.showMessageDialog(this, 
                                 "No se encontraron archivos para la cámara seleccionada.", 
                                 "Información", JOptionPane.INFORMATION_MESSAGE);
                         }
-                        cargandoAutomaticamente = false; // Restablecer el flag
+                        cargandoAutomaticamente = false;
                         return;
                     }
                     
-                    // Restablecer el flag de carga automática
                     cargandoAutomaticamente = false;
-                    
-                    // Mostrar solo las fotos en la tabla
                     int fotosMostradas = 0;
                     Set<String> tiposEncontrados = new HashSet<>();
+                    List<ArchivoMultimediaDTO> imagenesFiltradas = new ArrayList<>();
+                    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
                     
                     for (ArchivoMultimediaDTO archivo : archivos) {
                         String tipo = archivo.getTipo() != null ? archivo.getTipo().toUpperCase() : "";
+                        String nombreArchivo = archivo.getNombreArchivo().toLowerCase();
+                        
                         tiposEncontrados.add(tipo);
                         
-                        // Verificar si el archivo es una imagen (acepta FOTO, IMAGE, o extensiones comunes)
+                        // Verificar si el archivo es una imagen
                         if (tipo.contains("FOTO") || tipo.contains("IMAGE") || 
-                            archivo.getNombreArchivo().toLowerCase().matches(".*\\.(jpg|jpeg|png|gif|bmp)$")) {
+                            nombreArchivo.matches(".*\\.(jpg|jpeg|png|gif|bmp)$")) {
+                            
+                            // Formatear la fecha de captura de manera segura
+                            String fechaFormateada = "N/A";
+                            try {
+                                if (archivo.getFechaCaptura() != null) {
+                                    fechaFormateada = sdf.format(archivo.getFechaCaptura());
+                                }
+                            } catch (Exception e) {
+                                // Si hay algún error al formatear, mostramos la fecha como está
+                                fechaFormateada = String.valueOf(archivo.getFechaCaptura());
+                            }
+                            
                             modeloTabla.addRow(new Object[]{
                                 archivo.getIdArchivo(),
                                 archivo.getNombreArchivo(),
-                                archivo.getFechaCaptura() != null ? archivo.getFechaCaptura() : "N/A",
+                                fechaFormateada,
                                 tipo
                             });
+                            
+                            imagenesFiltradas.add(archivo);
                             fotosMostradas++;
                         }
                     }
                     
-                    // Mostrar mensaje si no se encontraron fotos después de filtrar
+                    archivosActuales = imagenesFiltradas;
+                    
                     if (fotosMostradas == 0 && !cargandoAutomaticamente) {
                         String mensaje = "No se encontraron archivos de imagen compatibles.\n\n" +
                                        "Tipos de archivo encontrados: " + 
-                                       (tiposEncontrados.isEmpty() ? "Ninguno" : String.join(", ", tiposEncontrados));
+                                       (tiposEncontrados.isEmpty() ? "Ninguno" : 
+                                       String.join(", ", tiposEncontrados));
                         
-                        JOptionPane.showMessageDialog(AplicarFiltros.this, 
+                        JOptionPane.showMessageDialog(this, 
                             mensaje, 
                             "Sin imágenes compatibles", JOptionPane.INFORMATION_MESSAGE);
                     }
                     
-                    // Habilitar el botón de aplicar filtro si hay elementos
                     btnAplicarFiltro.setEnabled(modeloTabla.getRowCount() > 0);
+                    
+                    // Seleccionar la primera imagen si hay resultados
+                    if (modeloTabla.getRowCount() > 0) {
+                        tablaFotos.setRowSelectionInterval(0, 0);
+                    }
                 });
             } catch (Exception e) {
-                // Manejar errores en el hilo de eventos
                 SwingUtilities.invokeLater(() -> {
-                    cargandoAutomaticamente = false; // Asegurarse de restablecer el flag en caso de error
-                    JOptionPane.showMessageDialog(AplicarFiltros.this, 
+                    cargandoAutomaticamente = false;
+                    JOptionPane.showMessageDialog(this, 
                         "Error al cargar las fotos: " + e.getMessage(), 
                         "Error", JOptionPane.ERROR_MESSAGE);
                     e.printStackTrace();
@@ -270,107 +392,255 @@ public class AplicarFiltros extends JFrame {
         }).start();
     }
     
+    /**
+     * Muestra la vista previa de la imagen seleccionada
+     */
+    private void mostrarVistaPrevia(ArchivoMultimediaDTO archivo) {
+        if (archivo == null || archivo.getIdArchivo() == null) {
+            actualizarVistaPrevia(null);
+            return;
+        }
+        
+        new Thread(() -> {
+            try {
+                // Construir la URL del endpoint para obtener la imagen
+                String url = servidorUrl + "/api/archivos/" + archivo.getIdArchivo();
+                
+                // Descargar la imagen
+                java.net.URL imageUrl = new java.net.URL(url);
+                java.net.HttpURLConnection connection = (java.net.HttpURLConnection) imageUrl.openConnection();
+                connection.setRequestMethod("GET");
+                
+                int responseCode = connection.getResponseCode();
+                if (responseCode != 200) {
+                    throw new IOException("Error al descargar la imagen. Código de respuesta: " + responseCode);
+                }
+                
+                // Leer la imagen
+                try (java.io.InputStream inputStream = connection.getInputStream()) {
+                    // Leer la imagen en un array de bytes
+                    java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                    byte[] data = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, bytesRead);
+                    }
+                    buffer.flush();
+                    
+                    // Convertir a ImageIcon
+                    byte[] imageData = buffer.toByteArray();
+                    ImageIcon iconoOriginal = new ImageIcon(imageData);
+                    
+                    // Escalar la imagen para que se ajuste al panel manteniendo la relación de aspecto
+                    int anchoPanel = panelVistaPrevia.getWidth() - 40; // Margen
+                    int altoPanel = panelVistaPrevia.getHeight() - 60; // Margen + espacio para el título
+                    
+                    if (anchoPanel <= 0) anchoPanel = 300;
+                    if (altoPanel <= 0) altoPanel = 300;
+                    
+                    // Calcular dimensiones manteniendo la relación de aspecto
+                    int ancho = iconoOriginal.getIconWidth();
+                    int alto = iconoOriginal.getIconHeight();
+                    double relacion = (double) ancho / alto;
+                    
+                    if (ancho > anchoPanel || alto > altoPanel) {
+                        if ((double) anchoPanel / ancho < (double) altoPanel / alto) {
+                            ancho = anchoPanel;
+                            alto = (int) (ancho / relacion);
+                        } else {
+                            alto = altoPanel;
+                            ancho = (int) (alto * relacion);
+                        }
+                    }
+                    
+                    // Crear una copia escalada de la imagen
+                    Image img = iconoOriginal.getImage().getScaledInstance(ancho, alto, Image.SCALE_SMOOTH);
+                    ImageIcon iconoEscalado = new ImageIcon(img);
+                    
+                    // Actualizar la interfaz en el hilo de eventos
+                    SwingUtilities.invokeLater(() -> {
+                        lblVistaPrevia.setIcon(iconoEscalado);
+                        lblVistaPrevia.setText("");
+                        panelVistaPrevia.revalidate();
+                        panelVistaPrevia.repaint();
+                    });
+                }
+                
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    lblVistaPrevia.setIcon(null);
+                    lblVistaPrevia.setText("<html><div style='text-align: center;'>Error al cargar la imagen<br>" + 
+                                          "<small>" + e.getMessage() + "</small></div>");
+                });
+                e.printStackTrace();
+            }
+        }).start();
+    }
+    
+    /**
+     * Actualiza la vista previa con un mensaje o una imagen
+     */
+    private void actualizarVistaPrevia(Icon icono) {
+        if (icono == null) {
+            lblVistaPrevia.setIcon(null);
+            lblVistaPrevia.setText("<html><div style='text-align: center;'>Seleccione una imagen<br>para previsualizar</div>");
+            lblVistaPrevia.setHorizontalAlignment(JLabel.CENTER);
+        } else {
+            lblVistaPrevia.setIcon(icono);
+            lblVistaPrevia.setText("");
+        }
+    }
+    
     private void aplicarFiltroSeleccionado() {
         int filaSeleccionada = tablaFotos.getSelectedRow();
         if (filaSeleccionada == -1) {
             JOptionPane.showMessageDialog(this, 
-                "Por favor, seleccione una foto de la lista.", 
-                "Selección requerida", JOptionPane.WARNING_MESSAGE);
+                "Por favor seleccione una imagen de la tabla primero.",
+                "Ninguna imagen seleccionada", 
+                JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        try {
-            // Obtener los datos del archivo seleccionado
-            Long idArchivo = (Long) modeloTabla.getValueAt(filaSeleccionada, 0);
-            String nombreArchivo = (String) modeloTabla.getValueAt(filaSeleccionada, 1);
-            String tipoArchivo = (String) modeloTabla.getValueAt(filaSeleccionada, 3);
+        ArchivoMultimediaDTO archivo = archivosActuales.get(filaSeleccionada);
+        
+        // Mostrar los filtros disponibles
+        String[] opcionesFiltro = {"Escala de grises", "Sepia", "Aumentar brillo"};
+        
+        String filtroSeleccionado = (String) JOptionPane.showInputDialog(
+            this,
+            "Seleccione el filtro a aplicar a la imagen:\n\n" +
+            "Archivo: " + archivo.getNombreArchivo() + "\n" +
+            "ID: " + archivo.getIdArchivo(),
+            "Aplicar Filtro a la Imagen",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            opcionesFiltro,
+            opcionesFiltro[0]);
             
-            // Verificar que el archivo sea una imagen (acepta varios tipos de imagen)
-            String tipoArchivoUpper = tipoArchivo != null ? tipoArchivo.toUpperCase() : "";
-            String nombreArchivoLower = nombreArchivo != null ? nombreArchivo.toLowerCase() : "";
-            
-            if (!tipoArchivoUpper.contains("FOTO") && 
-                !tipoArchivoUpper.contains("IMAGE") && 
-                !nombreArchivoLower.matches(".*\\.(jpg|jpeg|png|gif|bmp)$")) {
-                JOptionPane.showMessageDialog(this, 
-                    "Solo se pueden aplicar filtros a archivos de imagen.\n" +
-                    "Tipo de archivo actual: " + (tipoArchivo != null ? tipoArchivo : "Desconocido"), 
-                    "Tipo de archivo no soportado", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-            
-            // Mostrar opciones de filtro
-            String[] opcionesFiltro = {
-                "Escala de grises", 
-                "Sepia", 
-                "Negativo", 
-                "Brillo (+20%)", 
-                "Contraste (+30%)",
-                "Desenfocar"
-            };
-            
-            String filtroSeleccionado = (String) JOptionPane.showInputDialog(
+        if (filtroSeleccionado != null) {
+            // Mostrar confirmación antes de aplicar el filtro
+            int confirmacion = JOptionPane.showConfirmDialog(
                 this,
-                "Seleccione el filtro a aplicar a la imagen:\n\n" +
-                "Archivo: " + nombreArchivo + "\n" +
-                "ID: " + idArchivo,
-                "Aplicar Filtro a la Imagen",
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                opcionesFiltro,
-                opcionesFiltro[0]);
+                String.format("¿Aplicar el filtro '%s' a la imagen '%s'?", 
+                    filtroSeleccionado, archivo.getNombreArchivo()),
+                "Confirmar Aplicación de Filtro",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
                 
-            if (filtroSeleccionado != null) {
-                // Mostrar confirmación antes de aplicar el filtro
-                int confirmacion = JOptionPane.showConfirmDialog(
-                    this,
-                    String.format("¿Está seguro de aplicar el filtro '%s' a la imagen '%s'?", 
-                        filtroSeleccionado, nombreArchivo),
-                    "Confirmar Aplicación de Filtro",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE);
-                
-                if (confirmacion == JOptionPane.YES_OPTION) {
-                    // Aplicar el filtro en un hilo separado
-                    new Thread(() -> {
-                        try {
-                            // Mostrar indicador de progreso
-                            JOptionPane.showMessageDialog(AplicarFiltros.this, 
-                                String.format("Aplicando filtro '%s' a la imagen...", filtroSeleccionado), 
-                                "Procesando", JOptionPane.INFORMATION_MESSAGE);
-                            
-                            // Aquí iría la lógica real para aplicar el filtro
-                            // Por ahora simulamos un retardo
-                            Thread.sleep(2000);
-                            
-                            // Mostrar mensaje de éxito
-                            SwingUtilities.invokeLater(() -> {
-                                JOptionPane.showMessageDialog(AplicarFiltros.this, 
-                                    String.format("Filtro '%s' aplicado correctamente a '%s'.", 
-                                        filtroSeleccionado, nombreArchivo),
-                                    "Filtro Aplicado", JOptionPane.INFORMATION_MESSAGE);
-                                
-                                // Actualizar la lista de fotos para reflejar los cambios
-                                cargarFotosPorCamara();
-                            });
-                            
-                        } catch (Exception e) {
-                            // Mostrar mensaje de error
-                            SwingUtilities.invokeLater(() -> {
-                                JOptionPane.showMessageDialog(AplicarFiltros.this, 
-                                    "Error al aplicar el filtro: " + e.getMessage(), 
-                                    "Error", JOptionPane.ERROR_MESSAGE);
-                                e.printStackTrace();
-                            });
+            if (confirmacion == JOptionPane.YES_OPTION) {
+                // Aplicar el filtro en un hilo separado para no bloquear la interfaz
+                new Thread(() -> {
+                    try {
+                        // Obtener la imagen original
+                        String imageUrl = servidorUrl + "/api/archivos/" + archivo.getIdArchivo();
+                        java.net.URL url = new java.net.URL(imageUrl);
+                        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+                        connection.setRequestMethod("GET");
+                        
+                        int responseCode = connection.getResponseCode();
+                        if (responseCode != 200) {
+                            throw new IOException("Error al descargar la imagen. Código: " + responseCode);
                         }
-                    }).start();
-                }
+                        
+                        // Leer la imagen
+                        java.io.InputStream inputStream = connection.getInputStream();
+                        java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                        byte[] data = new byte[4096];
+                        int bytesRead;
+                        while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
+                            buffer.write(data, 0, bytesRead);
+                        }
+                        buffer.flush();
+                        
+                        // Convertir a BufferedImage
+                        byte[] imageData = buffer.toByteArray();
+                        java.io.ByteArrayInputStream bais = new java.io.ByteArrayInputStream(imageData);
+                        javax.imageio.ImageIO.setUseCache(false);
+                        java.awt.image.BufferedImage originalImage = javax.imageio.ImageIO.read(bais);
+                        
+                        if (originalImage == null) {
+                            throw new IOException("No se pudo decodificar la imagen");
+                        }
+                        
+                        // Aplicar el filtro seleccionado usando el pool de filtros
+                        java.awt.image.BufferedImage filteredImage = null;
+                        FiltroImagen filtro = null;
+                        
+                        try {
+                            switch (filtroSeleccionado) {
+                                case "Escala de grises":
+                                    filtro = PoolFiltros.obtenerFiltro(FiltroEscalaGrises.class);
+                                    filteredImage = filtro.aplicar(originalImage);
+                                    break;
+                                case "Sepia":
+                                    filtro = PoolFiltros.obtenerFiltro(FiltroSepia.class);
+                                    filteredImage = filtro.aplicar(originalImage);
+                                    break;
+                                case "Aumentar brillo":
+                                    filtro = PoolFiltros.obtenerFiltro(FiltroBrillo.class);
+                                    filteredImage = filtro.aplicar(originalImage);
+                                    break;
+                                default:
+                                    filteredImage = originalImage;
+                            }
+                        } finally {
+                            if (filtro != null) {
+                                PoolFiltros.liberarFiltro(filtro);
+                            }
+                        }
+                        
+                        // Crear directorio de salida si no existe
+                        String projectPath = System.getProperty("user.dir");
+                        String outputDir = projectPath + File.separator + "fotos_filtradas";
+                        java.io.File dir = new java.io.File(outputDir);
+                        if (!dir.exists()) {
+                            dir.mkdirs();
+                        }
+                        
+                        // Generar nombre de archivo único
+                        String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+                        String fileName = "filtrado_" + timestamp + "_" + archivo.getNombreArchivo();
+                        // Usar ruta relativa para el mensaje
+                        String filePath = "fotos_filtradas" + File.separator + fileName;
+                        
+                        // Guardar la imagen con filtro
+                        if (archivo.getNombreArchivo().toLowerCase().endsWith(".png")) {
+                            javax.imageio.ImageIO.write(filteredImage, "PNG", new java.io.File(filePath));
+                        } else {
+                            // Convertir a RGB para asegurar compatibilidad con JPEG
+                            java.awt.image.BufferedImage rgbImage = new java.awt.image.BufferedImage(
+                                filteredImage.getWidth(), 
+                                filteredImage.getHeight(),
+                                java.awt.image.BufferedImage.TYPE_INT_RGB);
+                            rgbImage.createGraphics().drawImage(filteredImage, 0, 0, java.awt.Color.WHITE, null);
+                            javax.imageio.ImageIO.write(rgbImage, "JPEG", new java.io.File(filePath));
+                        }
+                        
+                        // Mostrar mensaje de éxito en el hilo de eventos
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(
+                                this,
+                                String.format("Filtro '%s' aplicado correctamente.\n\n" +
+                                            "Imagen guardada en:\n%s",
+                                    filtroSeleccionado, filePath),
+                                "Filtro Aplicado",
+                                JOptionPane.INFORMATION_MESSAGE
+                            );
+                        });
+                        
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        SwingUtilities.invokeLater(() -> 
+                            JOptionPane.showMessageDialog(
+                                this,
+                                "Error al aplicar el filtro: " + e.getMessage(),
+                                "Error",
+                                JOptionPane.ERROR_MESSAGE
+                            )
+                        );
+                    }
+                }).start();
             }
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, 
-                "Error al procesar la solicitud: " + e.getMessage(), 
-                "Error", JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
         }
     }
 }

@@ -168,7 +168,9 @@ public class ClienteSwingUI extends JFrame {
                 CamaraService camaraService = controller.getCamaraService();
                 
                 if (archivoService != null && camaraService != null) {
-                    AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService);
+                    // Obtener la URL base del servidor del controlador
+                    String servidorUrl = controller.getServidorUrl();
+                    AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService, servidorUrl);
                     // Set the equipoId for the filters dialog
                     filtros.setEquipoId(1L); // TODO: Replace with actual equipoId from the application context
                     filtros.mostrar();

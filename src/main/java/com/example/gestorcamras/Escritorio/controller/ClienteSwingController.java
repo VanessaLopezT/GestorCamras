@@ -62,6 +62,14 @@ public class ClienteSwingController {
         return camaraServiceFilter;
     }
     
+    /**
+     * Obtiene la URL base del servidor configurada en el controlador
+     * @return URL base del servidor
+     */
+    public String getServidorUrl() {
+        return servidorUrl;
+    }
+    
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
         this.cookieSesion = cookieSesion;
         
