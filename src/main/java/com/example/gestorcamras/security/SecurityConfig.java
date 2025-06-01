@@ -64,12 +64,14 @@ public class SecurityConfig {
             "/actuator/**",
             // API endpoints
             "/api/equipos",
+            "/api/equipos/**",
             "/api/equipos/registrar",
             "/api/equipos/ip/**",
             "/api/equipos/*/camaras",
-            "/api/camaras/equipo/*",
+            "/api/equipos/*/camaras/**",
             "/api/camaras",
             "/api/camaras/**",
+            "/api/camaras/equipo/**",
             "/api/equipos/*/archivos",
             "/api/camaras/*/archivos",
             "/api/archivos/**",
@@ -83,19 +85,22 @@ public class SecurityConfig {
 
         return http
                 // Deshabilitar CSRF para endpoints específicos
-                .csrf(csrf -> csrf
-                    .ignoringRequestMatchers(
+                // Deshabilitar CSRF para todos los endpoints
+                .csrf(csrf -> csrf.disable()
+                    // Mantener estos ejemplos comentados como referencia
+                    /*.ignoringRequestMatchers(
                         "/ws", "/ws/**", "/ws/websocket/**", "/topic/**", "/queue/**", 
                         "/app/**", "/user/queue/**", "/sockjs/**"
                     )
                     .ignoringRequestMatchers(
                         "/api/equipos", "/api/equipos/**",
                         "/api/camaras", "/api/camaras/**",
+                        "/api/camaras/equipo/**",
                         "/api/archivos/**",
                         "/api/imagenes/**",
                         "/processed/**"
                     )
-                    .ignoringRequestMatchers("/login")
+                    .ignoringRequestMatchers("/login")*/
                 )
                 // Habilitar CORS para todos los orígenes
                 .cors(cors -> cors.configurationSource(request -> {
@@ -114,6 +119,11 @@ public class SecurityConfig {
                     .requestMatchers(publicPaths).permitAll()
                     // Endpoints de administración
                     .requestMatchers("/ADMINISTRADOR/**").hasRole("ADMINISTRADOR")
+                    // Permitir acceso sin autenticación a los endpoints de cámaras y equipos
+                    .requestMatchers("/api/camaras/**").permitAll()
+                    .requestMatchers("/api/equipos/**").permitAll()
+                    .requestMatchers("/api/archivos/**").permitAll()
+                    .requestMatchers("/api/imagenes/**").permitAll()
                     // API REST (requiere autenticación de operador)
                     .requestMatchers("/api/**").hasAnyRole("OPERADOR", "ADMINISTRADOR")
                     // Cualquier otra solicitud requiere autenticación
