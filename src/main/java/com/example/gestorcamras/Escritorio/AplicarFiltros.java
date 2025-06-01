@@ -6,6 +6,8 @@ import com.example.gestorcamras.filtros.PoolFiltros;
 import com.example.gestorcamras.filtros.impl.FiltroEscalaGrises;
 import com.example.gestorcamras.filtros.impl.FiltroSepia;
 import com.example.gestorcamras.filtros.impl.FiltroBrillo;
+import com.example.gestorcamras.filtros.impl.FiltroReducirTamano;
+import com.example.gestorcamras.filtros.impl.FiltroRotar;
 import com.example.gestorcamras.model.Camara;
 import com.example.gestorcamras.service.IArchivoMultimediaService;
 import com.example.gestorcamras.service.CamaraService;
@@ -504,7 +506,7 @@ public class AplicarFiltros extends JFrame {
         ArchivoMultimediaDTO archivo = archivosActuales.get(filaSeleccionada);
         
         // Mostrar los filtros disponibles
-        String[] opcionesFiltro = {"Escala de grises", "Sepia", "Aumentar brillo"};
+        String[] opcionesFiltro = {"Escala de grises", "Sepia", "Aumentar brillo", "Reducir tamaño", "Rotar 90°"};
         
         String filtroSeleccionado = (String) JOptionPane.showInputDialog(
             this,
@@ -578,6 +580,14 @@ public class AplicarFiltros extends JFrame {
                                     break;
                                 case "Aumentar brillo":
                                     filtro = PoolFiltros.obtenerFiltro(FiltroBrillo.class);
+                                    filteredImage = filtro.aplicar(originalImage);
+                                    break;
+                                case "Reducir tamaño":
+                                    filtro = PoolFiltros.obtenerFiltro(FiltroReducirTamano.class);
+                                    filteredImage = filtro.aplicar(originalImage);
+                                    break;
+                                case "Rotar 90°":
+                                    filtro = PoolFiltros.obtenerFiltro(FiltroRotar.class);
                                     filteredImage = filtro.aplicar(originalImage);
                                     break;
                                 default:

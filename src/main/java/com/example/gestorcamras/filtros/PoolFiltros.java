@@ -3,6 +3,8 @@ package com.example.gestorcamras.filtros;
 import com.example.gestorcamras.filtros.impl.FiltroEscalaGrises;
 import com.example.gestorcamras.filtros.impl.FiltroSepia;
 import com.example.gestorcamras.filtros.impl.FiltroBrillo;
+import com.example.gestorcamras.filtros.impl.FiltroReducirTamano;
+import com.example.gestorcamras.filtros.impl.FiltroRotar;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -22,11 +24,15 @@ public class PoolFiltros {
         pool.put(FiltroEscalaGrises.class, new LinkedList<>());
         pool.put(FiltroSepia.class, new LinkedList<>());
         pool.put(FiltroBrillo.class, new LinkedList<>());
+        pool.put(FiltroReducirTamano.class, new LinkedList<>());
+        pool.put(FiltroRotar.class, new LinkedList<>());
         
         // Precargar instancias por defecto
         precargar(DEFAULT_POOL_SIZE, FiltroEscalaGrises.class);
         precargar(DEFAULT_POOL_SIZE, FiltroSepia.class);
         precargar(DEFAULT_POOL_SIZE, FiltroBrillo.class);
+        precargar(DEFAULT_POOL_SIZE, FiltroReducirTamano.class);
+        precargar(DEFAULT_POOL_SIZE, FiltroRotar.class);
     }
     
     /**
@@ -104,11 +110,13 @@ public class PoolFiltros {
      * @return Array de cadenas con los nombres y descripciones de los filtros
      */
     public static String[] obtenerFiltrosDisponibles() {
-        return new String[] {
-            "escala_grises - Convierte la imagen a escala de grises",
-            "sepia - Aplica un efecto sepia a la imagen",
-            "brillo - Aumenta el brillo de la imagen en un 20%"
-        };
+        String[] filtros = new String[5];
+        filtros[0] = "escala_grises - Convierte la imagen a escala de grises";
+        filtros[1] = "sepia - Aplica un efecto sepia a la imagen";
+        filtros[2] = "brillo - Aumenta el brillo de la imagen en un 40%";
+        filtros[3] = "reducir_tamano - Reduce el tamaño de la imagen a la mitad";
+        filtros[4] = "rotar - Rota la imagen 90 grados en sentido horario";
+        return filtros;
     }
     
     /**

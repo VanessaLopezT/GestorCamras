@@ -4,13 +4,11 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
 import java.io.File;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.time.LocalDateTime;
 
 import javax.swing.JButton;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -24,7 +22,6 @@ import javax.swing.SwingUtilities;
 
 import com.example.gestorcamras.Escritorio.controller.ClienteSwingController;
 import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
-import com.example.gestorcamras.Escritorio.AplicarFiltros;
 import com.example.gestorcamras.service.IArchivoMultimediaService;
 import com.example.gestorcamras.service.CamaraService;
 
@@ -146,6 +143,7 @@ public class ClienteSwingUI extends JFrame {
         btnSeleccionarVideo.addActionListener(e -> seleccionarArchivo("video"));
         btnEnviarVideo.addActionListener(e -> enviarArchivo("VIDEO"));
 
+        // Agregar botones al panel de botones
         panelBotones.add(btnSeleccionarImagen);
         panelBotones.add(btnEnviarImagen);
         panelBotones.add(btnSeleccionarVideo);
@@ -157,7 +155,20 @@ public class ClienteSwingUI extends JFrame {
         // Botón para abrir la cámara
         JButton btnAbrirCamara = new JButton("Abrir Cámara");
         btnAbrirCamara.addActionListener(e -> abrirCamara());
+        
+        // Botón para ver capturas
+        JButton btnVerCapturas = new JButton("Ver Capturas");
+        btnVerCapturas.addActionListener(e -> {
+            // Abrir el visualizador de capturas sin necesidad de seleccionar una cámara
+            SwingUtilities.invokeLater(() -> {
+                VisualizadorCapturasUI visor = new VisualizadorCapturasUI("Todas las capturas");
+                visor.setVisible(true);
+            });
+        });
+        
+        // Agregar botones al panel de cámara
         panelCamara.add(btnAbrirCamara);
+        panelCamara.add(btnVerCapturas);
         
         // Botón para abrir los filtros
         JButton btnAbrirFiltros = new JButton("Aplicar Filtros");
@@ -171,8 +182,8 @@ public class ClienteSwingUI extends JFrame {
                     // Obtener la URL base del servidor del controlador
                     String servidorUrl = controller.getServidorUrl();
                     AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService, servidorUrl);
-                    // Set the equipoId for the filters dialog
-                    filtros.setEquipoId(1L); // TODO: Replace with actual equipoId from the application context
+                    // Establecer el ID del equipo para el diálogo de filtros
+                    filtros.setEquipoId(1L); // TODO: Reemplazar con el ID real del equipo del contexto de la aplicación
                     filtros.mostrar();
                 } else {
                     JOptionPane.showMessageDialog(this, 
@@ -181,13 +192,16 @@ public class ClienteSwingUI extends JFrame {
                         JOptionPane.ERROR_MESSAGE);
                 }
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, 
+                JOptionPane.showMessageDialog(
+                    this, 
                     "Error al abrir la ventana de filtros: " + ex.getMessage(),
                     "Error",
-                    JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.ERROR_MESSAGE
+                );
                 ex.printStackTrace();
             }
         });
+        
         panelCamara.add(btnAbrirFiltros);
         
         // Crear un panel para contener los botones y el panel de cámara
@@ -388,25 +402,72 @@ public class ClienteSwingUI extends JFrame {
     }
     
     private void enviarArchivo(String tipo) {
+        // Determinar el tipo de archivo para los mensajes
+        String tipoArchivo = tipo.equals("FOTO") ? "imagen" : "video";
+        
+        // Verificar si hay un equipo registrado
         if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
-            log("Error: No hay un equipo registrado. Carga las cámaras primero.");
+            String mensaje = String.format("Error: No hay un equipo registrado. Carga las cámaras primero para enviar %s.", tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
             return;
         }
         
+        // Verificar si se ha seleccionado una cámara
         int filaSeleccionada = tablaCamaras.getSelectedRow();
         if (filaSeleccionada == -1) {
-            log("Error: Debes seleccionar una cámara de la tabla.");
+            String mensaje = String.format("Error: Debes seleccionar una cámara de la tabla para enviar archivo tipo %s.", tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
             return;
         }
         
         // Obtener el nombre de la cámara seleccionada
         String nombreCamara = (String) modeloCamarasTabla.getValueAt(filaSeleccionada, 1);
         
+        // Verificar si hay un archivo seleccionado
         if (archivoSeleccionado == null) {
-            log("Error: No hay archivo seleccionado para enviar.");
+            String mensaje = String.format("Error: No hay ninguna %s seleccionada para enviar. Por favor, selecciona una %s primero.", 
+                tipoArchivo, tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
             return;
         }
         
+        // Verificar que el tipo de archivo coincida con el botón presionado
+        String nombreArchivo = archivoSeleccionado.getName().toLowerCase();
+        boolean esTipoCorrecto = (tipo.equals("FOTO") && (nombreArchivo.endsWith(".jpg") || 
+                                                          nombreArchivo.endsWith(".jpeg") || 
+                                                          nombreArchivo.endsWith(".png") ||
+                                                          nombreArchivo.endsWith(".gif"))) ||
+                                (tipo.equals("VIDEO") && (nombreArchivo.endsWith(".mp4") ||
+                                                         nombreArchivo.endsWith(".avi") ||
+                                                         nombreArchivo.endsWith(".mov") ||
+                                                         nombreArchivo.endsWith(".wmv")));
+        
+        if (!esTipoCorrecto) {
+            String tipoEsperado = tipo.equals("FOTO") ? "imagen (jpg, jpeg, png, gif)" : "video (mp4, avi, mov, wmv)";
+            String mensaje = String.format("Error: El archivo seleccionado no es un %s válido. Por favor, selecciona un archivo de tipo %s.", 
+                tipoArchivo, tipoEsperado);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Tipo de archivo no válido"),
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Si todo está bien, proceder a enviar el archivo
+        log(String.format("Enviando %s '%s' a la cámara '%s'...", tipoArchivo, archivoSeleccionado.getName(), nombreCamara));
         controller.enviarArchivo(equipoIdGenerado, nombreCamara, archivoSeleccionado, tipo);
     }
     
