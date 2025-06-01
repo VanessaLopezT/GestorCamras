@@ -25,7 +25,7 @@ import javax.swing.SwingUtilities;
 import com.example.gestorcamras.Escritorio.controller.ClienteSwingController;
 import com.example.gestorcamras.Escritorio.model.CamaraTableModel;
 import com.example.gestorcamras.Escritorio.AplicarFiltros;
-import com.example.gestorcamras.service.ArchivoMultimediaService;
+import com.example.gestorcamras.service.IArchivoMultimediaService;
 import com.example.gestorcamras.service.CamaraService;
 
 public class ClienteSwingUI extends JFrame {
@@ -164,11 +164,13 @@ public class ClienteSwingUI extends JFrame {
         btnAbrirFiltros.addActionListener(e -> {
             try {
                 // Obtener las instancias de los servicios del controlador
-                ArchivoMultimediaService archivoService = controller.getArchivoMultimediaService();
+                IArchivoMultimediaService archivoService = controller.getArchivoMultimediaService();
                 CamaraService camaraService = controller.getCamaraService();
                 
                 if (archivoService != null && camaraService != null) {
                     AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService);
+                    // Set the equipoId for the filters dialog
+                    filtros.setEquipoId(1L); // TODO: Replace with actual equipoId from the application context
                     filtros.mostrar();
                 } else {
                     JOptionPane.showMessageDialog(this, 

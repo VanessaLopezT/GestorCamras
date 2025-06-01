@@ -32,18 +32,34 @@ public class ClienteSwingController {
     private final FileUploadService fileUploadService;
     private StompClient stompClient;
 
+    // Servicios para los filtros
+    private com.example.gestorcamras.service.IArchivoMultimediaService archivoMultimediaService;
+    private com.example.gestorcamras.service.CamaraService camaraServiceFilter;
+    
     // Método para obtener el servicio de archivos multimedia
-    public com.example.gestorcamras.service.ArchivoMultimediaService getArchivoMultimediaService() {
-        // Si necesitas una implementación específica, debes crearla
-        // Por ahora, devolvemos null y manejamos el caso en el UI
-        return null;
+    public com.example.gestorcamras.service.IArchivoMultimediaService getArchivoMultimediaService() {
+        if (archivoMultimediaService == null) {
+            // Crear una instancia del servicio de archivos multimedia
+            archivoMultimediaService = new com.example.gestorcamras.Escritorio.service.ClienteArchivoMultimediaService(
+                servidorUrl, 
+                cookieSesion,
+                this::log
+            );
+        }
+        return archivoMultimediaService;
     }
     
     // Método para obtener el servicio de cámaras
     public com.example.gestorcamras.service.CamaraService getCamaraService() {
-        // Si necesitas una implementación específica, debes crearla
-        // Por ahora, devolvemos null y manejamos el caso en el UI
-        return null;
+        if (camaraServiceFilter == null) {
+            // Crear una instancia del servicio de cámaras
+            camaraServiceFilter = new com.example.gestorcamras.Escritorio.service.ClienteCamaraServiceImpl(
+                servidorUrl, 
+                cookieSesion,
+                this::log
+            );
+        }
+        return camaraServiceFilter;
     }
     
     public ClienteSwingController(String usuario, String cookieSesion, String servidorUrl) {
