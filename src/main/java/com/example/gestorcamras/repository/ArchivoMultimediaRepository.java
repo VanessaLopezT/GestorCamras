@@ -12,7 +12,7 @@ import com.example.gestorcamras.model.ArchivoMultimedia;
 @Repository
 public interface ArchivoMultimediaRepository extends JpaRepository<ArchivoMultimedia, Long> {
     
-    @Query("SELECT DISTINCT a FROM ArchivoMultimedia a LEFT JOIN FETCH a.camara WHERE a.equipo.idEquipo = :equipoId")
+    @Query("SELECT DISTINCT a FROM ArchivoMultimedia a LEFT JOIN FETCH a.camara c WHERE c.equipo.id = :equipoId")
     List<ArchivoMultimedia> findByEquipoIdEquipoWithCamara(@Param("equipoId") Long equipoId);
     
     @Query("SELECT DISTINCT a FROM ArchivoMultimedia a LEFT JOIN FETCH a.equipo WHERE a.camara.idCamara = :camaraId")

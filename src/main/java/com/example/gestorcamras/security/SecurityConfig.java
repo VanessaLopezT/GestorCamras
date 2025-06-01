@@ -73,6 +73,7 @@ public class SecurityConfig {
             "/api/equipos/*/archivos",
             "/api/camaras/*/archivos",
             "/api/archivos/**",
+            "/api/archivos/*",
             "/archivos_multimedia/**",
             // Endpoints de imágenes
             "/api/imagenes/**",
