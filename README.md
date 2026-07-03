@@ -9,8 +9,8 @@
 Plataforma empresarial integrada para la administración de dispositivos de videovigilancia, captura multimedia, procesamiento digital de imágenes y monitoreo en tiempo real. El sistema combina una arquitectura cliente-servidor distribuida compuesta por un **Backend Spring Boot** (API REST + Servidor Web) y un **Cliente de Escritorio Swing** (procesamiento local con OpenCV y sincronización remota).
 
 ---
-
-## 📌 Arquitectura del Sistema
+##  Proyecto con objetivos académicos
+##  Arquitectura del Sistema
 
 El sistema implementa una arquitectura desacoplada donde el cliente y el servidor comparten un contrato de datos unificado para evitar duplicaciones y dependencias cruzadas.
 
@@ -41,7 +41,7 @@ El sistema implementa una arquitectura desacoplada donde el cliente y el servido
 
 ---
 
-## 🚀 Funcionalidades Clave
+##  Funcionalidades Clave
 
 * **Monitoreo Distribuido**: Sincronización en tiempo real del estado de los equipos y cámaras utilizando WebSockets (STOMP).
 * **Procesamiento de Imágenes**: Aplicación de filtros digitales sobre capturas de cámaras de forma local y remota usando la biblioteca nativa OpenCV.
@@ -52,7 +52,7 @@ El sistema implementa una arquitectura desacoplada donde el cliente y el servido
 
 ---
 
-## 💻 Stack Tecnológico
+##  Stack Tecnológico
 
 | Componente | Tecnología | Versión / Descripción |
 |---|---|---|
@@ -69,7 +69,7 @@ El sistema implementa una arquitectura desacoplada donde el cliente y el servido
 
 ---
 
-## 🔧 Requisitos Previos
+##  Requisitos Previos
 
 * **Java Development Kit (JDK)** versión 17 o superior instalado.
 * **Base de Datos MySQL** corriendo en `localhost:3306` (esquema: `gestor_camaras`).
@@ -77,11 +77,11 @@ El sistema implementa una arquitectura desacoplada donde el cliente y el servido
 * *(Opcional)* PowerShell con permisos de administrador para ejecutar scripts automatizados.
 
 > [!TIP]
-> Si estás en entorno Windows, puedes utilizar el script `.\start-redis.ps1` en la raíz del proyecto para descargar, instalar como servicio y levantar Redis automáticamente.
+> Si está en entorno Windows, puede utilizar el script `.\start-redis.ps1` en la raíz del proyecto para descargar, instalar como servicio y levantar Redis automáticamente.
 
 ---
 
-## 🛠️ Instalación y Configuración
+##  Instalación y Configuración
 
 ### 1. Configuración de Base de Datos
 Crea una base de datos en tu servidor MySQL:
@@ -99,7 +99,7 @@ spring.datasource.password=tu_contrasena
 
 ---
 
-## 🏃 Ejecución del Proyecto
+##  Ejecución del Proyecto
 
 ### Iniciar el Servidor Backend
 Compila el proyecto y pon en marcha la aplicación Spring Boot usando el Maven Wrapper provisto:
@@ -130,7 +130,7 @@ Al iniciarse por primera vez, el sistema autogenera las siguientes credenciales 
 
 ---
 
-## 🧪 Pruebas Unitarias e Integración
+##  Pruebas Unitarias e Integración
 
 Para validar la correcta implementación y consistencia de los modelos y mappers sin depender de infraestructura externa (MySQL/Redis), la suite de pruebas del proyecto utiliza una base de datos **H2 en memoria** con un dialecto compatible con MySQL y deshabilita la persistencia en caché.
 
@@ -141,7 +141,7 @@ Ejecuta las pruebas en cualquier entorno ejecutando:
 
 ---
 
-## 📂 Estructura del Código
+##  Estructura del Código
 
 ```text
 src/main/java/com/example/gestorcamaras/
@@ -160,7 +160,7 @@ src/main/java/com/example/gestorcamaras/
 
 ---
 
-## 🎨 Patrones de Diseño Implementados
+##  Patrones de Diseño Implementados
 
 * **Object Pool (Filtros)**: El procesamiento de imágenes con OpenCV requiere instanciar objetos pesados en memoria. Implementamos un Pool que almacena filtros pre-inicializados para evitar sobrecargar el recolector de basura (GC) y optimizar la CPU durante la captura de frames.
 * **Builder (Informes)**: La exportación de reportes multimedia puede variar en campos y estructura. El patrón Builder permite configurar paso a paso el formato del informe sin sobrecargar constructores.
