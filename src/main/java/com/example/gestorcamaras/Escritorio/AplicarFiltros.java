@@ -1,6 +1,6 @@
 package com.example.gestorcamaras.Escritorio;
 
-import com.example.gestorcamaras.Escritorio.model.ArchivoMultimediaDTO;
+import com.example.gestorcamaras.dto.ArchivoMultimediaDTO;
 import com.example.gestorcamaras.filtros.FiltroImagen;
 import com.example.gestorcamaras.filtros.PoolFiltros;
 import com.example.gestorcamaras.filtros.impl.FiltroEscalaGrises;
@@ -17,7 +17,6 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -339,7 +338,8 @@ public class AplicarFiltros extends JFrame {
                     Set<String> tiposEncontrados = new HashSet<>();
                     List<ArchivoMultimediaDTO> imagenesFiltradas = new ArrayList<>();
                     // Formateador de fecha
-                    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+                    java.time.format.DateTimeFormatter formatoFecha =
+                        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
                     
                     for (ArchivoMultimediaDTO archivo : archivos) {
                         String tipo = archivo.getTipo() != null ? archivo.getTipo().toUpperCase() : "";
@@ -353,20 +353,8 @@ public class AplicarFiltros extends JFrame {
                             
                             // Formatear la fecha de captura de manera segura
                             String fechaFormateada = "N/A";
-                            try {
-                                String fechaStr = archivo.getFechaCaptura();
-                                if (fechaStr != null && !fechaStr.isEmpty()) {
-                                    // Intentar formatear la fecha si está en un formato conocido
-                                    try {
-                                        fechaFormateada = sdf.format(sdf.parse(fechaStr));
-                                    } catch (Exception e) {
-                                        // Si no se puede formatear, usar el valor original
-                                        fechaFormateada = fechaStr;
-                                    }
-                                }
-                            } catch (Exception e) {
-                                // Si hay algún error, mostramos N/A
-                                fechaFormateada = "N/A";
+                            if (archivo.getFechaCaptura() != null) {
+                                fechaFormateada = archivo.getFechaCaptura().format(formatoFecha);
                             }
                             
                             modeloTabla.addRow(new Object[]{

@@ -31,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.gestorcamaras.dto.ArchivoMultimediaDTO;
+import com.example.gestorcamaras.dto.ArchivoMultimediaMapper;
 import com.example.gestorcamaras.model.ArchivoMultimedia;
 import com.example.gestorcamaras.model.Camara;
 import com.example.gestorcamaras.model.Equipo;
@@ -335,16 +336,12 @@ public class ArchivoMultimediaController {
 
     @GetMapping("/equipos/{idEquipo}/archivos")
     public List<ArchivoMultimediaDTO> obtenerArchivosEquipo(@PathVariable Long idEquipo) {
-        return archivoRepository.findByEquipoIdEquipoWithCamara(idEquipo).stream()
-                .map(this::convertirADTO)
-                .toList();
+        return ArchivoMultimediaMapper.toDTOList(archivoRepository.findByEquipoIdEquipoWithCamara(idEquipo));
     }
 
     @GetMapping("/camaras/{idCamara}/archivos")
     public List<ArchivoMultimediaDTO> obtenerArchivosCamara(@PathVariable Long idCamara) {
-        return archivoRepository.findByCamaraIdCamaraWithEquipo(idCamara).stream()
-                .map(this::convertirADTO)
-                .toList();
+        return ArchivoMultimediaMapper.toDTOList(archivoRepository.findByCamaraIdCamaraWithEquipo(idCamara));
     }
 
     @GetMapping("/archivos/{id}")
@@ -398,16 +395,4 @@ public class ArchivoMultimediaController {
         }
     }
 
-    private ArchivoMultimediaDTO convertirADTO(ArchivoMultimedia archivo) {
-        ArchivoMultimediaDTO dto = new ArchivoMultimediaDTO();
-        dto.setIdArchivo(archivo.getIdArchivo());
-        dto.setNombreArchivo(archivo.getNombreArchivo());
-        dto.setRutaArchivo(archivo.getRutaArchivo());
-        dto.setTipo(archivo.getTipo().toString());
-        dto.setFechaCaptura(archivo.getFechaCaptura());
-        dto.setFechaSubida(archivo.getFechaSubida());
-        dto.setCamaraId(archivo.getCamara().getIdCamara());
-        dto.setEquipoId(archivo.getEquipo().getIdEquipo());
-        return dto;
-    }
 } 

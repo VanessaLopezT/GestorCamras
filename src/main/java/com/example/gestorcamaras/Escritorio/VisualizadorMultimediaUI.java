@@ -1,6 +1,10 @@
 package com.example.gestorcamaras.Escritorio;
 
-import com.example.gestorcamaras.Escritorio.dto.ArchivoMultimediaDTO;
+import com.example.gestorcamaras.dto.ArchivoMultimediaDTO;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -63,6 +67,11 @@ public class VisualizadorMultimediaUI extends JFrame {
     
     private List<ArchivoMultimediaDTO> archivosActuales;
     private int indiceActual = -1;
+
+    /** Deserializa el contrato JSON al DTO compartido; mismas reglas de fecha que el servidor (ISO-8601). */
+    private static final ObjectMapper JSON_MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
 
     public VisualizadorMultimediaUI() {
         setTitle("Visualizador de Multimedia");
@@ -443,37 +452,13 @@ public class VisualizadorMultimediaUI extends JFrame {
                         String responseBody = response.body();
                         logEnSwing("Archivos recibidos: " + responseBody);
                         
-                        // Procesar la respuesta JSON
-                        JSONArray archivosJson = new JSONArray(responseBody);
+                        // Deserializar directamente al DTO compartido (el contrato vive en un solo lugar)
                         List<ArchivoMultimediaDTO> archivos = new ArrayList<>();
-                        
-                        for (int i = 0; i < archivosJson.length(); i++) {
-                            try {
-                                JSONObject archivoJson = archivosJson.getJSONObject(i);
-                                ArchivoMultimediaDTO archivo = new ArchivoMultimediaDTO();
-                                
-                                // Mapear los campos según la estructura de ArchivoMultimediaDTO
-                                archivo.setId(archivoJson.getLong("idArchivo"));
-                                archivo.setNombre(archivoJson.optString("nombreArchivo", "archivo_sin_nombre"));
-                                archivo.setRuta(archivoJson.optString("rutaArchivo", ""));
-                                archivo.setTipo(archivoJson.optString("tipo", "desconocido"));
-                                
-                                // Convertir fechas de String a LocalDateTime
-                                try {
-                                    DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-                                    if (archivoJson.has("fechaCaptura")) {
-                                        archivo.setFechaCaptura(LocalDateTime.parse(
-                                            archivoJson.getString("fechaCaptura"), formatter));
-                                    }
-                                } catch (Exception e) {
-                                    logEnSwing("Error al parsear fecha: " + e.getMessage());
-                                }
-                                
-                                archivos.add(archivo);
-                                
-                            } catch (Exception e) {
-                                logEnSwing("Error al procesar archivo: " + e.getMessage());
-                            }
+                        try {
+                            archivos = JSON_MAPPER.readValue(responseBody,
+                                new TypeReference<List<ArchivoMultimediaDTO>>() {});
+                        } catch (Exception e) {
+                            logEnSwing("Error al procesar archivos: " + e.getMessage());
                         }
                         
                         // Actualizar la interfaz de usuario con los archivos cargados
@@ -529,10 +514,10 @@ public class VisualizadorMultimediaUI extends JFrame {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
             String info = String.format("Archivo %d de %d | %s | %s | %s | %s", 
                 indiceActual + 1, archivosActuales.size(),
-                archivo.getNombre(),
+                archivo.getNombreArchivo(),
                 archivo.getTipo(),
                 archivo.getFechaCaptura() != null ? archivo.getFechaCaptura().format(formatter) : "Sin fecha",
-                archivo.getRuta() != null ? archivo.getRuta() : "Sin ruta");
+                archivo.getRutaArchivo() != null ? archivo.getRutaArchivo() : "Sin ruta");
             
             lblInfo.setText(info);
             
@@ -541,7 +526,7 @@ public class VisualizadorMultimediaUI extends JFrame {
             
             try {
                 // Obtener y validar la ruta del archivo
-                final String rutaArchivo = archivo.getRuta();
+                final String rutaArchivo = archivo.getRutaArchivo();
                 
                 if (rutaArchivo == null || rutaArchivo.trim().isEmpty()) {
                     throw new Exception("La ruta del archivo está vacía");
@@ -555,7 +540,7 @@ public class VisualizadorMultimediaUI extends JFrame {
                         urlArchivo = rutaArchivo;
                     } else {
                         // Usar el nuevo endpoint para obtener el archivo por su ID
-                        urlArchivo = "http://localhost:8080/api/archivos/" + archivo.getId();
+                        urlArchivo = "http://localhost:8080/api/archivos/" + archivo.getIdArchivo();
                         logEnSwing("Usando nuevo endpoint para obtener el archivo: " + urlArchivo);
                     }
                 } catch (Exception e) {
@@ -777,7 +762,7 @@ public class VisualizadorMultimediaUI extends JFrame {
         if (indiceActual >= 0 && indiceActual < archivosActuales.size()) {
             ArchivoMultimediaDTO archivo = archivosActuales.get(indiceActual);
             JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setSelectedFile(new java.io.File(archivo.getNombre()));
+            fileChooser.setSelectedFile(new java.io.File(archivo.getNombreArchivo()));
             
             if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                 try {
@@ -803,7 +788,7 @@ public class VisualizadorMultimediaUI extends JFrame {
         if (indiceActual >= 0 && indiceActual < archivosActuales.size()) {
             ArchivoMultimediaDTO archivo = archivosActuales.get(indiceActual);
             int confirm = JOptionPane.showConfirmDialog(this, 
-                "¿Está seguro de que desea eliminar el archivo " + archivo.getNombre() + "?",
+                "¿Está seguro de que desea eliminar el archivo " + archivo.getNombreArchivo() + "?",
                 "Confirmar eliminación", 
                 JOptionPane.YES_NO_OPTION);
                 

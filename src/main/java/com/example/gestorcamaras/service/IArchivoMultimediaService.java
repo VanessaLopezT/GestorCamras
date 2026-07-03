@@ -1,6 +1,6 @@
 package com.example.gestorcamaras.service;
 
-import com.example.gestorcamaras.Escritorio.model.ArchivoMultimediaDTO;
+import com.example.gestorcamaras.dto.ArchivoMultimediaDTO;
 
 import java.util.List;
 

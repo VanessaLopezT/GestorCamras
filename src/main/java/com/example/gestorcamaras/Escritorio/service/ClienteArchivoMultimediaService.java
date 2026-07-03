@@ -1,6 +1,6 @@
 package com.example.gestorcamaras.Escritorio.service;
 
-import com.example.gestorcamaras.Escritorio.model.ArchivoMultimediaDTO;
+import com.example.gestorcamaras.dto.ArchivoMultimediaDTO;
 import com.example.gestorcamaras.model.ArchivoMultimedia;
 import com.example.gestorcamaras.service.IArchivoMultimediaService;
 import com.fasterxml.jackson.core.type.TypeReference;
