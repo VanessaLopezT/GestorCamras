@@ -1,5 +1,5 @@
-$source = "src\main\java\com\example\gestorcamras\Escritorio\ServidorUI.java.new"
-$destination = "src\main\java\com\example\gestorcamras\Escritorio\ServidorUI.java"
+$source = "src\main\java\com\example\gestorcamaras\Escritorio\ServidorUI.java.new"
+$destination = "src\main\java\com\example\gestorcamaras\Escritorio\ServidorUI.java"
 
 # Verificar si el archivo de origen existe
 if (Test-Path $source) {

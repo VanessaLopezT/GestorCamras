@@ -1,0 +1,136 @@
+package com.example.gestorcamaras.controller;
+import com.example.gestorcamaras.service.CamaraService;
+import com.example.gestorcamaras.service.WebSocketService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import com.example.gestorcamaras.dto.CamaraDTO;
+
+@RestController
+@RequestMapping("/api/camaras")
+public class CamaraController {
+
+    @Autowired
+    private CamaraService camaraService;
+    
+    @Autowired
+    private WebSocketService webSocketService;
+
+    @GetMapping
+    public List<CamaraDTO> listarCamaras() {
+        return camaraService.obtenerTodas();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<CamaraDTO> obtenerCamaraPorId(@PathVariable Long id) {
+        return camaraService.obtenerPorId(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+    
+    @GetMapping("/equipo/{idEquipo}")
+    public ResponseEntity<List<CamaraDTO>> obtenerCamarasPorEquipo(@PathVariable Long idEquipo) {
+        List<CamaraDTO> camaras = camaraService.obtenerPorEquipo(idEquipo);
+        return ResponseEntity.ok(camaras);
+    }
+
+    @PostMapping
+    public ResponseEntity<Map<String, Object>> crearCamara(@RequestBody CamaraDTO camaraDTO) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // Validar campos requeridos
+            if (camaraDTO.getNombre() == null || camaraDTO.getNombre().trim().isEmpty()) {
+                response.put("success", false);
+                response.put("message", "El nombre de la cámara es requerido");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Establecer valores por defecto si no están presentes
+            if (camaraDTO.getFechaRegistro() == null) {
+                camaraDTO.setFechaRegistro(LocalDateTime.now());
+            }
+            
+            // Si la IP no está establecida, establecer un valor por defecto
+            if (camaraDTO.getIp() == null || camaraDTO.getIp().trim().isEmpty()) {
+                camaraDTO.setIp("0.0.0.0");
+            }
+            
+            // Establecer estado activo por defecto si no está establecido
+            camaraDTO.setActiva(true);
+            
+            // Guardar la cámara
+            CamaraDTO guardada = camaraService.guardarCamara(camaraDTO);
+            
+            if (guardada == null) {
+                response.put("success", false);
+                response.put("message", "No se pudo guardar la cámara");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+            }
+            
+            // Obtener la cámara recién guardada para asegurar que tenemos los datos más recientes
+            if (guardada.getIdCamara() != null) {
+                guardada = camaraService.obtenerPorId(guardada.getIdCamara())
+                    .orElse(guardada); // Si no se puede obtener, usar la que ya tenemos
+                
+                // Notificar a través de WebSocket
+                if (guardada.getEquipoId() != null) {
+                    try {
+                        Map<String, Object> mensaje = new HashMap<>();
+                        mensaje.put("tipo", "nueva_camara");
+                        mensaje.put("equipoId", guardada.getEquipoId());
+                        mensaje.put("camara", guardada);
+                        
+                        // Enviar notificación
+                        webSocketService.notificarNuevaCamara(guardada.getEquipoId(), mensaje);
+                        
+                        // Registrar la acción
+                        System.out.println("Notificación WebSocket enviada para la cámara del equipo: " + guardada.getEquipoId());
+                    } catch (Exception e) {
+                        // No fallar la operación principal si hay un error en la notificación
+                        System.err.println("Error al enviar notificación WebSocket: " + e.getMessage());
+                    }
+                }
+            }
+            
+            response.put("success", true);
+            response.put("message", "Cámara guardada exitosamente");
+            response.put("data", guardada);
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            String errorMsg = "Error al guardar la cámara: " + e.getMessage();
+            System.err.println(errorMsg);
+            e.printStackTrace();
+            
+            response.put("success", false);
+            response.put("message", errorMsg);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<CamaraDTO> actualizarCamara(@PathVariable Long id, @RequestBody CamaraDTO camaraDetalle) {
+        return camaraService.obtenerPorId(id).map(existing -> {
+            camaraDetalle.setIdCamara(id);
+            CamaraDTO actualizada = camaraService.guardarCamara(camaraDetalle);
+            return ResponseEntity.ok(actualizada);
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminarCamara(@PathVariable Long id) {
+        if (camaraService.obtenerPorId(id).isPresent()) {
+            camaraService.eliminarCamara(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+}
+

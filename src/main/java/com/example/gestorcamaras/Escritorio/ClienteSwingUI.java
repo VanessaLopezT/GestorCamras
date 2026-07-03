@@ -1,0 +1,655 @@
+package com.example.gestorcamaras.Escritorio;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.io.File;
+import java.time.LocalDateTime;
+
+import javax.swing.JButton;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.JFileChooser;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+
+import com.example.gestorcamaras.Escritorio.controller.ClienteSwingController;
+import com.example.gestorcamaras.Escritorio.model.CamaraTableModel;
+import com.example.gestorcamaras.service.IArchivoMultimediaService;
+
+import javax.swing.Timer;
+import com.example.gestorcamaras.service.CamaraService;
+import org.json.JSONArray;
+
+public class ClienteSwingUI extends JFrame {
+    private static final long serialVersionUID = 1L;
+    
+    private JTextField txtServidorUrl;
+    private final String serverIp;  // Almacenar la IP del servidor que se ingresó
+    private String equipoIdGenerado;  // Para almacenar el ID del equipo generado
+    private JTextArea txtLog;
+    private File archivoSeleccionado;
+    private JTable tablaCamaras;
+    private CamaraTableModel modeloCamarasTabla;
+    private final ClienteSwingController controller;
+    private final String usuario;
+    
+    public ClienteSwingUI(String usuario, String cookieSesion, String serverIp) {
+        this.usuario = usuario;
+        this.serverIp = serverIp;  // Guardar la IP del servidor
+        
+        // Crear una variable local final para la URL formateada
+        String urlFinal = serverIp;
+        
+        // Asegurarse de que la URL tenga el formato correcto
+        if (urlFinal != null && !urlFinal.startsWith("http")) {
+            urlFinal = "http://" + urlFinal;
+        }
+        if (urlFinal != null && !urlFinal.endsWith(":8080")) {
+            urlFinal = urlFinal + ":8080";
+        }
+        
+        final String finalUrl = urlFinal;  // Variable efectivamente final para la expresión lambda
+        this.controller = new ClienteSwingController(usuario, cookieSesion, finalUrl);
+        
+        // Configurar consumidor de logs
+        controller.setLogConsumer(this::log);
+        
+        // Configurar la interfaz de usuario
+        initUI();
+        
+        // Configurar el consumidor de estado de conexión
+        controller.setConnectionStatusConsumer(conectado -> {
+            if (conectado) {
+                // Una vez que la conexión está establecida, cargar las cámaras
+                SwingUtilities.invokeLater(this::cargarCamaras);
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    String.format("No se pudo conectar al servidor en %s. Verifica que el servidor esté en ejecución y la URL sea correcta.", finalUrl),
+                    "Error de conexión", 
+                    JOptionPane.ERROR_MESSAGE);
+                System.exit(1);
+            }
+        });
+        
+        // Iniciar la verificación de conexión
+        verificarYConectar();
+    }
+    
+    private void verificarYConectar() {
+        // Iniciar la verificación de conexión
+        controller.verificarYConectar();
+    }
+    
+    private void initUI() {
+        setTitle("Cliente Equipo - Gestor de Cámaras (Usuario: " + usuario + ")");
+        setSize(1000, 700);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        
+        // Inicializar el modelo de la tabla de cámaras
+        modeloCamarasTabla = new CamaraTableModel();
+        tablaCamaras = new JTable(modeloCamarasTabla);
+        tablaCamaras.setFillsViewportHeight(true);
+        tablaCamaras.setAutoCreateRowSorter(true);
+
+        // Panel superior para URL y equipo
+        JPanel panelArriba = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        panelArriba.add(new JLabel("Servidor URL:"));
+        
+        // Usar la IP del servidor que se ingresó en el diálogo de inicio
+        txtServidorUrl = new JTextField("http://" + serverIp + ":8080", 20);
+        txtServidorUrl.setEditable(false);  // Hacer el campo de solo lectura
+        panelArriba.add(txtServidorUrl);
+
+        // Etiqueta para mostrar el ID del equipo (solo lectura)
+        equipoIdLabel = new JLabel("ID Equipo: Generando...");
+        panelArriba.add(equipoIdLabel);
+
+        JButton btnCargarCamaras = new JButton("Cargar cámaras");
+        btnCargarCamaras.addActionListener(e -> cargarCamaras());
+        panelArriba.add(btnCargarCamaras);
+
+        JButton btnProbarConex = new JButton("Probar conexión");
+        btnProbarConex.addActionListener(e -> probarConexion());
+        panelArriba.add(btnProbarConex);
+
+        panel.add(panelArriba, BorderLayout.NORTH);
+
+        // Panel central para tabla de cámaras
+        JPanel panelCentro = new JPanel(new BorderLayout(5, 5));
+        panelCentro.add(new JLabel("Cámaras disponibles:"), BorderLayout.NORTH);
+        
+        // Panel para la tabla de cámaras
+        JScrollPane scrollTabla = new JScrollPane(tablaCamaras);
+        scrollTabla.setPreferredSize(new Dimension(0, 200));
+        panelCentro.add(scrollTabla, BorderLayout.CENTER);
+
+        // Panel para los botones de archivos
+        JPanel panelBotones = new JPanel(new GridLayout(2, 2, 10, 10));
+        JButton btnSeleccionarImagen = new JButton("Seleccionar imagen");
+        JButton btnEnviarImagen = new JButton("Enviar imagen");
+        JButton btnSeleccionarVideo = new JButton("Seleccionar video");
+        JButton btnEnviarVideo = new JButton("Enviar video");
+
+        btnSeleccionarImagen.addActionListener(e -> seleccionarArchivo("imagen"));
+        btnEnviarImagen.addActionListener(e -> enviarArchivo("FOTO"));
+        btnSeleccionarVideo.addActionListener(e -> seleccionarArchivo("video"));
+        btnEnviarVideo.addActionListener(e -> enviarArchivo("VIDEO"));
+
+        // Agregar botones al panel de botones
+        panelBotones.add(btnSeleccionarImagen);
+        panelBotones.add(btnEnviarImagen);
+        panelBotones.add(btnSeleccionarVideo);
+        panelBotones.add(btnEnviarVideo);
+        
+        // Panel para los botones de cámara y filtros
+        JPanel panelCamara = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        
+        // Botón para abrir la cámara
+        JButton btnAbrirCamara = new JButton("Abrir Cámara");
+        btnAbrirCamara.addActionListener(e -> abrirCamara());
+        
+        // Botón para ver capturas
+        JButton btnVerCapturas = new JButton("Ver Capturas");
+        btnVerCapturas.addActionListener(e -> {
+            // Abrir el visualizador de capturas sin necesidad de seleccionar una cámara
+            SwingUtilities.invokeLater(() -> {
+                VisualizadorCapturasUI visor = new VisualizadorCapturasUI("Todas las capturas");
+                visor.setVisible(true);
+            });
+        });
+        
+        // Agregar botones al panel de cámara
+        panelCamara.add(btnAbrirCamara);
+        panelCamara.add(btnVerCapturas);
+        
+        // Botón para abrir los filtros
+        JButton btnAbrirFiltros = new JButton("Aplicar Filtros");
+        btnAbrirFiltros.addActionListener(e -> {
+            try {
+                // Obtener las instancias de los servicios del controlador
+                IArchivoMultimediaService archivoService = controller.getArchivoMultimediaService();
+                CamaraService camaraService = controller.getCamaraService();
+                
+                if (archivoService != null && camaraService != null) {
+                    // Verificar que haya un equipo registrado
+                    if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+                        JOptionPane.showMessageDialog(this, 
+                            "No hay un equipo registrado. Por favor, registre un equipo primero.",
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                        return;
+                    }
+                    
+                    try {
+                        // Obtener la URL base del servidor del controlador
+                        String servidorUrl = controller.getServidorUrl();
+                        AplicarFiltros filtros = new AplicarFiltros(archivoService, camaraService, servidorUrl);
+                        // Establecer el ID del equipo para el diálogo de filtros
+                        filtros.setEquipoId(Long.parseLong(equipoIdGenerado));
+                        filtros.mostrar();
+                    } catch (NumberFormatException ex) {
+                        JOptionPane.showMessageDialog(this, 
+                            "Error: El ID del equipo no es válido: " + equipoIdGenerado,
+                            "Error", 
+                            JOptionPane.ERROR_MESSAGE);
+                    }
+                } else {
+                    JOptionPane.showMessageDialog(this, 
+                        "No se pudieron cargar los servicios necesarios para los filtros.",
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(
+                    this, 
+                    "Error al abrir la ventana de filtros: " + ex.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE
+                );
+                ex.printStackTrace();
+            }
+        });
+        
+        panelCamara.add(btnAbrirFiltros);
+        
+        // Crear un panel para contener los botones y el panel de cámara
+        JPanel panelBotonesInferior = new JPanel(new BorderLayout(10, 10));
+        panelBotonesInferior.add(panelBotones, BorderLayout.NORTH);
+        panelBotonesInferior.add(panelCamara, BorderLayout.SOUTH);
+
+        // Panel sur para los botones y el área de log
+        JPanel panelSur = new JPanel(new BorderLayout(10, 10));
+        panelSur.add(panelBotonesInferior, BorderLayout.NORTH);
+        
+        // Área de log
+        txtLog = new JTextArea();
+        txtLog.setEditable(false);
+        JScrollPane scrollLog = new JScrollPane(txtLog);
+        scrollLog.setPreferredSize(new Dimension(0, 100));
+        panelSur.add(scrollLog, BorderLayout.CENTER);
+        
+        // Agregar paneles al panel principal
+        panelCentro.add(panelBotonesInferior, BorderLayout.SOUTH);
+        panel.add(panelCentro, BorderLayout.CENTER);
+        panel.add(panelSur, BorderLayout.SOUTH);
+        add(panel);
+    }
+    
+    private void probarConexion() {
+        try {
+            String servidorUrl = txtServidorUrl.getText();
+            if (servidorUrl.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Por favor ingrese la URL del servidor", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            // Aquí podrías agregar lógica para probar la conexión
+            // Por ahora, simplemente mostramos un mensaje
+            JOptionPane.showMessageDialog(this, "Conexión exitosa!", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error de conexión: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+
+    
+    private void registrarNuevoEquipo() {
+        controller.registrarEquipo(id -> {
+            if (id != null) {
+                equipoIdGenerado = id;
+                log("Equipo registrado con ID: " + id);
+                // Al registrar un nuevo equipo, solo mostramos el ID sin cargar cámaras automáticamente
+                SwingUtilities.invokeLater(() -> {
+                    if (equipoIdLabel != null) {
+                        equipoIdLabel.setText("ID Equipo: " + id);
+                    }
+                });
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "No se pudo registrar el equipo. Intente nuevamente.", 
+                    "Error", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+    
+    private JLabel equipoIdLabel; // Add this as a class field
+
+
+    /**
+     * Método que se llama al hacer clic en el botón 'Cargar cámaras'.
+     * Este método intenta registrar una nueva cámara local si no hay cámaras existentes.
+     */
+    private void cargarCamaras() {
+        // Si ya tenemos un ID de equipo generado, usarlo
+        if (equipoIdGenerado != null && !equipoIdGenerado.isEmpty()) {
+            cargarCamarasConBoton(equipoIdGenerado);
+            return;
+        }
+        
+        // Si no hay ID generado, registramos un nuevo equipo
+        registrarNuevoEquipo();
+    }
+    
+    /**
+     * Carga las cámaras y, si no hay ninguna, intenta registrar una nueva cámara local.
+     * Este método se llama solo cuando el usuario hace clic en el botón 'Cargar cámaras'.
+     * @param equipoId ID del equipo del cual cargar las cámaras
+     */
+    private void cargarCamarasConBoton(String equipoId) {
+        // Variable para evitar múltiples registros de cámara
+        final boolean[] registroEnCurso = {false};
+        
+        // Clase interna para manejar la carga de cámaras
+        class CargadorCamaras implements Runnable {
+            private final String equipoId;
+            private final boolean[] registroEnCurso;
+            
+            public CargadorCamaras(String equipoId, boolean[] registroEnCurso) {
+                this.equipoId = equipoId;
+                this.registroEnCurso = registroEnCurso;
+            }
+            
+            @Override
+            public void run() {
+                if (registroEnCurso[0]) {
+                    log("Ya hay un registro de cámara en curso, omitiendo...");
+                    return;
+                }
+                
+                log("Cargando cámaras para el equipo: " + equipoId);
+                controller.cargarCamaras(equipoId, camaras -> {
+                    SwingUtilities.invokeLater(() -> {
+                        if (camaras != null && camaras.length() > 0) {
+                            log("Se encontraron " + camaras.length() + " cámaras");
+                            // Actualizar la tabla con las cámaras
+                            modeloCamarasTabla.setCamaras(camaras);
+                            log("Tabla de cámaras actualizada");
+                        } else if (!registroEnCurso[0]) {
+                            log("No se encontraron cámaras. Registrando una nueva cámara local...");
+                            registroEnCurso[0] = true; // Marcar que hay un registro en curso
+                            
+                            // Mostrar mensaje informativo al usuario
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "No se encontraron cámaras. Se registrará una nueva cámara local.", 
+                                "Registrando cámara", 
+                                JOptionPane.INFORMATION_MESSAGE);
+                            
+                            // Registrar la nueva cámara
+                            registrarCamaraLocal(equipoId);
+                        }
+                    });
+                });
+            }
+            
+            private void registrarCamaraLocal(String equipoId) {
+                log("Iniciando registro de nueva cámara local...");
+                controller.registrarCamaraLocal(equipoId, camaraId -> {
+                    SwingUtilities.invokeLater(() -> {
+                        registroEnCurso[0] = false; // Restablecer el estado de registro
+                        
+                        if (camaraId != null) {
+                            log("Cámara local registrada exitosamente con ID: " + camaraId);
+                            
+                            // Mostrar mensaje de éxito
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "Cámara local registrada exitosamente con ID: " + camaraId, 
+                                "Registro exitoso", 
+                                JOptionPane.INFORMATION_MESSAGE);
+                            
+                            // Esperar un momento para asegurar que el servidor haya actualizado su estado
+                            Timer timer = new Timer(1500, e -> {
+                                log("Actualizando lista de cámaras después del registro exitoso...");
+                                
+                                // Volver a cargar las cámaras después del registro
+                                controller.cargarCamaras(equipoId, camarasActualizadas -> {
+                                    SwingUtilities.invokeLater(() -> {
+                                        if (camarasActualizadas != null && camarasActualizadas.length() > 0) {
+                                            log("Se encontraron " + camarasActualizadas.length() + " cámaras después del registro");
+                                            modeloCamarasTabla.setCamaras(camarasActualizadas);
+                                            log("Tabla de cámaras actualizada exitosamente");
+                                            
+                                            // Seleccionar automáticamente la cámara recién creada
+                                            if (tablaCamaras.getRowCount() > 0) {
+                                                tablaCamaras.setRowSelectionInterval(0, 0);
+                                                log("Cámara seleccionada automáticamente");
+                                            }
+                                        } else {
+                                            log("No se pudieron cargar las cámaras después del registro");
+                                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                                "No se pudieron cargar las cámaras después del registro. Por favor, intente nuevamente.", 
+                                                "Advertencia", 
+                                                JOptionPane.WARNING_MESSAGE);
+                                        }
+                                    });
+                                });
+                            });
+                            timer.setRepeats(false); // Ejecutar solo una vez
+                            timer.start();
+                            
+                        } else {
+                            log("Error al registrar la cámara local");
+                            JOptionPane.showMessageDialog(ClienteSwingUI.this, 
+                                "No se pudo registrar la cámara local. Por favor, verifique su conexión e intente nuevamente.", 
+                                "Error al registrar cámara", 
+                                JOptionPane.ERROR_MESSAGE);
+                        }
+                    });
+                });
+            }
+        }
+        
+        // Iniciar la carga de cámaras
+        log("Iniciando carga de cámaras...");
+        new CargadorCamaras(equipoId, registroEnCurso).run();
+    }
+    
+    private void seleccionarArchivo(String tipo) {
+        // Determinar la carpeta base según el tipo de archivo
+        String carpetaBase = "capturas/";
+        String subcarpeta = "";
+        
+        if (tipo.toLowerCase().contains("foto") || tipo.toLowerCase().contains("imagen")) {
+            subcarpeta = "fotos";
+        } else if (tipo.toLowerCase().contains("video")) {
+            subcarpeta = "videos";
+        }
+        
+        // Crear la ruta completa a la carpeta
+        String rutaCarpeta = carpetaBase + subcarpeta;
+        File carpeta = new File(rutaCarpeta);
+        
+        // Si la carpeta no existe, intentar crearla
+        if (!carpeta.exists()) {
+            boolean creada = carpeta.mkdirs();
+            if (!creada) {
+                log("No se pudo crear la carpeta: " + rutaCarpeta);
+                // Usar el directorio de usuario como respaldo
+                carpeta = new File(System.getProperty("user.home"));
+            }
+        }
+        
+        // Configurar el selector de archivos
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(carpeta);
+        
+        // Configurar filtros según el tipo de archivo
+        if (tipo.toLowerCase().contains("foto") || tipo.toLowerCase().contains("imagen")) {
+            chooser.setFileFilter(new FileNameExtensionFilter("Imágenes", "jpg", "jpeg", "png", "gif"));
+        } else if (tipo.toLowerCase().contains("video")) {
+            chooser.setFileFilter(new FileNameExtensionFilter("Videos", "mp4", "avi", "mov", "wmv"));
+        }
+        
+        int resultado = chooser.showOpenDialog(this);
+        if (resultado == JFileChooser.APPROVE_OPTION) {
+            archivoSeleccionado = chooser.getSelectedFile();
+            log("Archivo seleccionado para " + tipo + ": " + archivoSeleccionado.getAbsolutePath());
+        } else {
+            log("Selección de archivo cancelada");
+        }
+    }
+    
+    private void enviarArchivo(String tipo) {
+        // Determinar el tipo de archivo para los mensajes
+        String tipoArchivo = tipo.equals("FOTO") ? "imagen" : "video";
+        
+        // Verificar si hay un equipo registrado
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            String mensaje = String.format("Error: No hay un equipo registrado. Carga las cámaras primero para enviar %s.", tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Verificar si se ha seleccionado una cámara
+        int filaSeleccionada = tablaCamaras.getSelectedRow();
+        if (filaSeleccionada == -1) {
+            String mensaje = String.format("Error: Debes seleccionar una cámara de la tabla para enviar archivo tipo %s.", tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Obtener el nombre de la cámara seleccionada
+        String nombreCamara = (String) modeloCamarasTabla.getValueAt(filaSeleccionada, 1);
+        
+        // Verificar si hay un archivo seleccionado
+        if (archivoSeleccionado == null) {
+            String mensaje = String.format("Error: No hay ninguna %s seleccionada para enviar. Por favor, selecciona una %s primero.", 
+                tipoArchivo, tipoArchivo);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Error al enviar %s", tipoArchivo),
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Verificar que el tipo de archivo coincida con el botón presionado
+        String nombreArchivo = archivoSeleccionado.getName().toLowerCase();
+        boolean esTipoCorrecto = (tipo.equals("FOTO") && (nombreArchivo.endsWith(".jpg") || 
+                                                          nombreArchivo.endsWith(".jpeg") || 
+                                                          nombreArchivo.endsWith(".png") ||
+                                                          nombreArchivo.endsWith(".gif"))) ||
+                                (tipo.equals("VIDEO") && (nombreArchivo.endsWith(".mp4") ||
+                                                         nombreArchivo.endsWith(".avi") ||
+                                                         nombreArchivo.endsWith(".mov") ||
+                                                         nombreArchivo.endsWith(".wmv")));
+        
+        if (!esTipoCorrecto) {
+            String tipoEsperado = tipo.equals("FOTO") ? "imagen (jpg, jpeg, png, gif)" : "video (mp4, avi, mov, wmv)";
+            String mensaje = String.format("Error: El archivo seleccionado no es un %s válido. Por favor, selecciona un archivo de tipo %s.", 
+                tipoArchivo, tipoEsperado);
+            log(mensaje);
+            JOptionPane.showMessageDialog(this, 
+                mensaje,
+                String.format("Tipo de archivo no válido"),
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Si todo está bien, proceder a enviar el archivo
+        log(String.format("Enviando %s '%s' a la cámara '%s'...", tipoArchivo, archivoSeleccionado.getName(), nombreCamara));
+        controller.enviarArchivo(equipoIdGenerado, nombreCamara, archivoSeleccionado, tipo);
+    }
+    
+    private void log(String mensaje) {
+        SwingUtilities.invokeLater(() -> {
+            txtLog.append(LocalDateTime.now().toString() + " - " + mensaje + "\n");
+            txtLog.setCaretPosition(txtLog.getDocument().getLength());
+        });
+    }
+    
+    /**
+     * Returns the main panel containing all UI components.
+     * @return JPanel containing the main UI components
+     */
+    public JPanel getMainPanel() {
+        // Get the content pane and return its first (and only) component which should be the main panel
+        return (JPanel) getContentPane().getComponent(0);
+    }
+    
+    @Override
+    public void dispose() {
+        controller.detener();
+        super.dispose();
+    }
+    
+    /**
+     * Abre la ventana de la cámara para tomar fotos o grabar videos.
+     */
+    private void abrirCamara() {
+        // Verificar que haya un equipo registrado y cámaras disponibles
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            log("Error: No hay un equipo registrado. Carga las cámaras primero.");
+            JOptionPane.showMessageDialog(this, 
+                "No hay un equipo registrado. Por favor, carga las cámaras primero.",
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        int filaSeleccionada = tablaCamaras.getSelectedRow();
+        if (filaSeleccionada == -1) {
+            log("Error: Debes seleccionar una cámara de la tabla.");
+            JOptionPane.showMessageDialog(this, 
+                "Por favor, selecciona una cámara de la tabla antes de abrir la cámara.",
+                "Error", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
+        // Obtener el nombre de la cámara seleccionada
+        final String nombreCamara = (String) modeloCamarasTabla.getValueAt(filaSeleccionada, 1);
+        
+        // Ejecutar en el hilo de eventos de Swing
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // Crear y mostrar la ventana de la cámara
+                CamaraFrame frameCamara = new CamaraFrame(rutaArchivo -> {
+                    // Este callback se ejecutará cuando se guarde una foto o video
+                    log("Archivo guardado: " + rutaArchivo);
+                    
+                    // Determinar el tipo de archivo (foto o video)
+                    String tipo = rutaArchivo.toLowerCase().endsWith(".mp4") || 
+                                 rutaArchivo.toLowerCase().endsWith(".avi") ? "VIDEO" : "FOTO";
+                    
+                    // Crear un objeto File para el archivo
+                    File archivo = new File(rutaArchivo);
+                    
+                    // Mostrar confirmación al usuario
+                    int opcion = JOptionPane.showConfirmDialog(this,
+                        String.format("¿Deseas enviar el %s '%s' al servidor?", 
+                                     tipo.toLowerCase(), 
+                                     archivo.getName()),
+                        "Archivo guardado",
+                        JOptionPane.YES_NO_OPTION);
+                    
+                    if (opcion == JOptionPane.YES_OPTION) {
+                        // Enviar el archivo al servidor
+                        enviarArchivo(tipo, archivo, nombreCamara);
+                    }
+                });
+                
+                frameCamara.setLocationRelativeTo(this); // Centrar respecto a la ventana principal
+                frameCamara.setVisible(true);
+                
+                // Cuando se cierre la ventana de la cámara, liberar recursos
+                frameCamara.addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                        log("Ventana de cámara cerrada");
+                    }
+                });
+                
+                log("Cámara abierta correctamente");
+            } catch (Exception e) {
+                log("Error al abrir la cámara: " + e.getMessage());
+                JOptionPane.showMessageDialog(this, 
+                    "No se pudo abrir la cámara. Asegúrate de que esté conectada y no esté siendo usada por otra aplicación.\nError: " + e.getMessage(),
+                    "Error de Cámara", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+    
+    /**
+     * Envía un archivo al servidor.
+     * @param tipo Tipo de archivo ("FOTO" o "VIDEO")
+     * @param archivo Archivo a enviar
+     * @param nombreCamara Nombre de la cámara que capturó el archivo
+     */
+    private void enviarArchivo(String tipo, File archivo, String nombreCamara) {
+        if (equipoIdGenerado == null || equipoIdGenerado.isEmpty()) {
+            log("Error: No hay un equipo registrado. No se puede enviar el archivo.");
+            return;
+        }
+        
+        if (archivo == null || !archivo.exists()) {
+            log("Error: El archivo no existe o no se puede acceder a él.");
+            return;
+        }
+        
+        log(String.format("Enviando %s al servidor: %s", tipo.toLowerCase(), archivo.getAbsolutePath()));
+        
+        // Usar el controlador para enviar el archivo
+        controller.enviarArchivo(equipoIdGenerado, nombreCamara, archivo, tipo);
+    }
+}
